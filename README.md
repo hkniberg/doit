@@ -1,6 +1,5 @@
 A proof-of-concept implementation of dynamic GPT function calling. 
-
-This allows GPT to generate the code it needs to solve your request. 
+This allows GPT to generate the code it needs on-the-fly.
 
 For example if you ask it to download a page, it will dynamially generate the code
 to download a page, and then call it.
