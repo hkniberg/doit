@@ -1,9 +1,13 @@
 // codegen.mjs
 import fs from "fs";
 import path from "path";
-import detective from "detective";
+import detectiveEs6 from "detective-es6";
 import {execSync} from "child_process";
 
+/**
+ * functionCode is a string containing the code for the function.
+ * Should use ESM syntax with import/export instead of require.
+ */
 export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, functionCode) {
     console.log("saveFunctionAndUpdateDependencies", generatedCodeFolder, functionName)
     if (!generatedCodeFolder) {
@@ -17,7 +21,7 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
     }
 
     // Save the implementation to a file in generatedCodeFolder
-    const filePath = path.join(generatedCodeFolder, `${functionName}.js`);
+    const filePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
     fs.writeFileSync(filePath, functionCode);
 
     // Create or update package.json in that folder
@@ -29,15 +33,11 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
         packageJson = {
             name: "generated-code",
             version: "1.0.0",
-            main: "index.js",
-            scripts: {
-                test: "echo \"Error: no test specified\" && exit 1"
-            }
         };
     }
 
     // Detect required modules using detective
-    const requiredModules = detective(functionCode);
+    const requiredModules = detectiveEs6(functionCode);
 
     // Add detected modules to the package.json dependencies
     packageJson.dependencies = packageJson.dependencies || {};
@@ -66,7 +66,7 @@ export async function callFunction(generatedCodeFolder, functionName, functionAr
         throw new Error("functionArgs is required");
     }
 
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.js`); // Add .js extension
+    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`); // Updated to .mjs
     const module = await import(modulePath);
     const importedFunction = module[`${functionName}`];
     return importedFunction(functionArgs);
@@ -79,7 +79,7 @@ export async function testFunction(generatedCodeFolder, functionName) {
     if (!functionName) {
         throw new Error("functionName is required");
     }
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.js`);
+    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`); // Updated to .mjs
     const module = await import(modulePath);
     const unitTestFunction = module[`${functionName}Test`];
 
@@ -95,4 +95,3 @@ export async function testFunction(generatedCodeFolder, functionName) {
         console.warn(`No unit test found for ${functionName}.`);
     }
 }
-

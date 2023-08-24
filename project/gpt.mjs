@@ -3,11 +3,11 @@ import {callFunction, saveFunctionAndUpdateDependencies, testFunction} from "./c
 import readlineSync from 'readline-sync';
 import path from "path";
 import {createFolderIfMissing, getLast, trimBackticks} from "./util.mjs";
+import fs from "fs";
 
 // All these will be relative to the output folder
 const TEST_SCRATCH_FOLDER_NAME='test-scratch';
 const CODE_FOLDER_NAME='code';
-const FILES_FOLDER_NAME='files';
 
 const sampleFunctionSpec = {
     "name": "getWeather",
@@ -62,7 +62,7 @@ const createFunctionImplementationPrompt = `
         """
         
         Give me a complete javascript module that exports {functionName} and {functionName}Test.
-        - Use require() to import any modules you need. Don't use import.
+        - Use ESM syntax and import/export, not require(). 
         - {functionName} should only take one argument, an object with named parameters.
         - Include logging in the code so I can see what it is doing.
         - The function should throw an error if it can't complete.
@@ -122,7 +122,12 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, test
 
     const functionSpecString = specResponse.choices[0].message.content.split('---')[1].trim();
     const trimmedFunctionSpecString = trimBackticks(functionSpecString);
+
+    const functionSpecFilePath = path.join(generatedCodeFolder, `${functionName}.json`);
+    fs.writeFileSync(functionSpecFilePath, trimmedFunctionSpecString);
+
     console.log(`Done! Function ${functionName} is now implemented and tested and ready to use!`);
+
     return JSON.parse(trimmedFunctionSpecString);
 }
 
@@ -130,15 +135,13 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, test
  * Calls GPT and allows it to dynamically generate functions needed to complete the task.
  */
 export async function callGptWithDynamicFunctionCreation(openai, model, outputFolder, gptPrompt) {
-    const outputFilesFolder = path.join(outputFolder, FILES_FOLDER_NAME);
-    createFolderIfMissing(outputFilesFolder);
     const generatedCodeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
     createFolderIfMissing(generatedCodeFolder);
     const testScratchFolder = path.join(outputFolder, TEST_SCRATCH_FOLDER_NAME);
     createFolderIfMissing(testScratchFolder);
 
     let messages = [
-        { role: "system", content: mainSystemMessage.replace('{OUTPUT_FILES_FOLDER}', outputFilesFolder)},
+        { role: "system", content: mainSystemMessage},
         { role: "user", content: gptPrompt }
     ];
 
