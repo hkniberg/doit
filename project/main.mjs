@@ -15,10 +15,11 @@ if (!fs.existsSync(OUTPUT_FOLDER)) {
 
 const MODEL = "gpt-4";
 (async () => {
-    let prompt = `Create a file on my computer called hello.txt which contains the text 'Hello World!'. 
+    let prompt1 = `Create a file on my computer called hello.txt which contains the text 'Hello World!'. 
     Place it in the ${OUTPUT_FOLDER} folder.`
 
-    //let prompt = "Download the contents of kniberg.com and save to a file called kniberg.txt"
-    await callGptWithDynamicFunctionCreation(openai, MODEL, GENERATED_CODE_FOLDER, prompt)
+    let prompt2 = "Download the contents of kniberg.com and save to a file called kniberg.txt."
+
+    await callGptWithDynamicFunctionCreation(openai, MODEL, GENERATED_CODE_FOLDER, prompt2)
 })();
 

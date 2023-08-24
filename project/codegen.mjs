@@ -4,8 +4,8 @@ import path from "path";
 import detective from "detective";
 import {execSync} from "child_process";
 
-export function createFunction(generatedCodeFolder, functionName, functionCode) {
-    console.log("createFunction", generatedCodeFolder, functionName, functionCode)
+export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, functionCode) {
+    console.log("saveFunctionAndUpdateDependencies", generatedCodeFolder, functionName)
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -27,7 +27,7 @@ export function createFunction(generatedCodeFolder, functionName, functionCode) 
 
     // Create or update package.json in that folder
     const packageJsonPath = path.join(generatedCodeFolder, 'package.json');
-    let packageJson = {};
+    let packageJson;
     if (fs.existsSync(packageJsonPath)) {
         packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     } else {
@@ -60,6 +60,7 @@ export function createFunction(generatedCodeFolder, functionName, functionCode) 
 }
 
 export async function callFunction(generatedCodeFolder, functionName, functionArgs) {
+    console.log("callFunction", generatedCodeFolder, functionName, functionArgs);
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -72,6 +73,31 @@ export async function callFunction(generatedCodeFolder, functionName, functionAr
 
     const modulePath = path.join(generatedCodeFolder, `${functionName}.js`); // Add .js extension
     const module = await import(modulePath);
-    const importedFunction = module.default || module; // Depending on how you export in the module
+    const importedFunction = module[`${functionName}`];
     return importedFunction(functionArgs);
 }
+
+export async function testFunction(generatedCodeFolder, functionName) {
+    if (!generatedCodeFolder) {
+        throw new Error("generatedCodeFolder is required");
+    }
+    if (!functionName) {
+        throw new Error("functionName is required");
+    }
+    const modulePath = path.join(generatedCodeFolder, `${functionName}.js`);
+    const module = await import(modulePath);
+    const unitTestFunction = module[`${functionName}Test`];
+
+    if (typeof unitTestFunction === 'function') {
+        try {
+            unitTestFunction();
+            console.log(`Unit test for ${functionName} passed.`);
+        } catch (error) {
+            console.error(`Unit test for ${functionName} failed.`, error);
+            throw new Error(`Unit test for ${functionName} failed.`);
+        }
+    } else {
+        console.warn(`No unit test found for ${functionName}.`);
+    }
+}
+

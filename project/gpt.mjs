@@ -1,6 +1,8 @@
 // gpt.mjs
-import {callFunction, createFunction} from "./codegen.mjs";
+import {callFunction, saveFunctionAndUpdateDependencies, testFunction} from "./codegen.mjs";
 import readlineSync from 'readline-sync';
+
+const TEST_SCRATCH_FOLDER='../test-scratch';
 
 const sampleFunctionSpec = {
     "name": "getWeather",
@@ -44,21 +46,27 @@ const mainSystemMessage = `
         Use the given function requestFunction() function to describe what you need,
         and I will make sure those functions are available to you in the next message.
         After you have all the functions you need, respond to the original prompt.
-    `
+        `;
+
 const createFunctionImplementationPrompt = `
-        Write a javascript function named {functionName} based on the following description within tripple quotes:
+        Write a javascript function named {functionName} and a corresponding unit test named {functionName}Test
+        based on the following description within tripple quotes:
         """
         {functionDescription}
         """
         
-        Give me a complete javascript module with that function as the default export. 
+        Give me a complete javascript module that exports {functionName} and {functionName}Test.
         - Use require() to import any modules you need. Don't use import.
-        - The function should only take one argument, an object with named parameters.
+        - {functionName} should only take one argument, an object with named parameters.
         - Include logging in the code so I can see what it is doing.
         - The function should throw an error if it can't complete.
+        - {functionName}Test should take no arguments. If the test passes, it should return nothing. If it fails, it should throw an error.
+        - If {functionName}Test needs to create temporary files, it should place them in {testScratchFolder} (create the folder if missing).
+        - Use async/await for asynchronous operations, rather than callbacks.
+        - if {functionName} is async, the test should use await the result.
         
         Use --- as delimiter at the beginning and end of the module.
-        `
+        `;
 
 const createFunctionSpecPrompt = `
     Create a function spec for the code above.
@@ -66,40 +74,50 @@ const createFunctionSpecPrompt = `
     ${JSON.stringify(sampleFunctionSpec, null, 2)}
     
     Use --- as delimiter at the beginning and end of the function spec.
-`
+`;
+
 async function askGptToGenerateFunction(openai, model, generatedCodeFolder, functionName, functionDescription) {
     let messages = [
-        { role: "system", content: createFunctionImplementationPrompt.replace('{functionName}', functionName).replace('{functionDescription}', functionDescription) }
+        { role: "system", content: "You are an awesome javascript coding genius" },
     ];
 
-    // Ask GPT for the function implementation
-    const implementationResponse = await openai.chat.completions.create({
-        model: model,
-        messages: messages
-    });
+    let implementationPrompt = createFunctionImplementationPrompt
+        .replace('{functionName}', functionName)
+        .replace('{functionDescription}', functionDescription)
+        .replace('{testScratchFolder}', TEST_SCRATCH_FOLDER);
+    messages.push({ role: "user", content: implementationPrompt });
 
-    const implementation = implementationResponse.choices[0].message.content.split('---')[1].trim();
+    console.log(`Asking GPT to write code and test for function ${functionName}...`);
+    const implementationResponse = await openai.chat.completions.create({model, messages})
+
+    const functionCode = implementationResponse.choices[0].message.content.split('---')[1].trim();
+    const trimmedFunctionCode = trimBackticks(functionCode);
 
     // Show the generated code to the user and ask for approval
-    console.log("\nGenerated Function Implementation:\n", implementation);
-    const userApproval = readlineSync.question(`Do you approve the creation of this function? (Y/N) `);
+    console.log(`======== Generated function: ${functionName} ==============`);
+    console.log(trimmedFunctionCode);
+    console.log(`===========================================================`);
+    const userApproval = readlineSync.question(`\n Do you approve the creation of this function? (Y/N) `);
 
     if (userApproval.toLowerCase() !== 'y') {
         throw new Error("Function creation declined by user.");
     }
 
-    // Save the function
-    await createFunction(generatedCodeFolder, functionName, implementation);
+    console.log("Saving the function and updating dependencies...")
+    await saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, trimmedFunctionCode);
+
+    console.log(`Running unit test ${functionName}Test...`);
+    await testFunction(generatedCodeFolder, functionName);
 
     // Ask GPT for the function spec
+    console.log("Test passed! Asking GPT to generate a function spec...")
     messages.push({ role: "user", content: createFunctionSpecPrompt });
-    const specResponse = await openai.chat.completions.create({
-        model: model,
-        messages: messages
-    });
+    const specResponse = await openai.chat.completions.create({model, messages});
 
     const functionSpecString = specResponse.choices[0].message.content.split('---')[1].trim();
-    return JSON.parse(functionSpecString);
+    const trimmedFunctionSpecString = trimBackticks(functionSpecString);
+    console.log(`Done! Function ${functionName} is now implemented and tested and ready to use!`);
+    return JSON.parse(trimmedFunctionSpecString);
 }
 
 /**
@@ -155,4 +173,20 @@ export async function callGptWithDynamicFunctionCreation(openai, model, generate
 
 function getLast(array) {
     return array[array.length - 1];
+}
+
+function trimBackticks(content) {
+    const lines = content.split('\n');
+
+    // Remove the first line if it starts with ```
+    if (lines[0].startsWith('```')) {
+        lines.shift();
+    }
+
+    // Remove the last line if it starts with ```
+    if (lines[lines.length - 1].startsWith('```')) {
+        lines.pop();
+    }
+
+    return lines.join('\n');
 }
