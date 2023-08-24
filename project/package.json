@@ -1,0 +1,18 @@
+{
+  "name": "gpt-dynamic-functions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "detective": "^5.2.1",
+    "dotenv-safe": "^8.2.0",
+    "openai": "^4.2.0",
+    "readline-sync": "^1.4.10"
+  }
+}
