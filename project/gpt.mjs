@@ -1,8 +1,13 @@
 // gpt.mjs
 import {callFunction, saveFunctionAndUpdateDependencies, testFunction} from "./codegen.mjs";
 import readlineSync from 'readline-sync';
+import path from "path";
+import {createFolderIfMissing, getLast, trimBackticks} from "./util.mjs";
 
-const TEST_SCRATCH_FOLDER='../test-scratch';
+// All these will be relative to the output folder
+const TEST_SCRATCH_FOLDER_NAME='test-scratch';
+const CODE_FOLDER_NAME='code';
+const FILES_FOLDER_NAME='files';
 
 const sampleFunctionSpec = {
     "name": "getWeather",
@@ -32,8 +37,9 @@ const requestFunctionSpec = {
             },
             "description": {
                 "type": "string",
-                "description": "A description of what the function does, include input params and return value." +
-                    "For example: Sends an email to the given email address with the given subject and body."
+                "description": "A detailed description of what the function does, include input params, and return value." +
+                    "For example: 'Sends an email to the given email address with the given subject and body'." +
+                    "Also include an example of the input you plan to send to this function."
             }
         },
         "required": ["name", "description"]
@@ -76,7 +82,7 @@ const createFunctionSpecPrompt = `
     Use --- as delimiter at the beginning and end of the function spec.
 `;
 
-async function askGptToGenerateFunction(openai, model, generatedCodeFolder, functionName, functionDescription) {
+async function askGptToGenerateFunction(openai, model, generatedCodeFolder, testScratchFolder, functionName, functionDescription) {
     let messages = [
         { role: "system", content: "You are an awesome javascript coding genius" },
     ];
@@ -84,7 +90,7 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, func
     let implementationPrompt = createFunctionImplementationPrompt
         .replace('{functionName}', functionName)
         .replace('{functionDescription}', functionDescription)
-        .replace('{testScratchFolder}', TEST_SCRATCH_FOLDER);
+        .replace('{testScratchFolder}', testScratchFolder);
     messages.push({ role: "user", content: implementationPrompt });
 
     console.log(`Asking GPT to write code and test for function ${functionName}...`);
@@ -123,9 +129,16 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, func
 /**
  * Calls GPT and allows it to dynamically generate functions needed to complete the task.
  */
-export async function callGptWithDynamicFunctionCreation(openai, model, generatedCodeFolder, gptPrompt) {
+export async function callGptWithDynamicFunctionCreation(openai, model, outputFolder, gptPrompt) {
+    const outputFilesFolder = path.join(outputFolder, FILES_FOLDER_NAME);
+    createFolderIfMissing(outputFilesFolder);
+    const generatedCodeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
+    createFolderIfMissing(generatedCodeFolder);
+    const testScratchFolder = path.join(outputFolder, TEST_SCRATCH_FOLDER_NAME);
+    createFolderIfMissing(testScratchFolder);
+
     let messages = [
-        { role: "system", content: mainSystemMessage },
+        { role: "system", content: mainSystemMessage.replace('{OUTPUT_FILES_FOLDER}', outputFilesFolder)},
         { role: "user", content: gptPrompt }
     ];
 
@@ -154,6 +167,7 @@ export async function callGptWithDynamicFunctionCreation(openai, model, generate
                     openai,
                     model,
                     generatedCodeFolder,
+                    testScratchFolder,
                     functionArgs.name,
                     functionArgs.description
                 );
@@ -171,22 +185,3 @@ export async function callGptWithDynamicFunctionCreation(openai, model, generate
     }
 }
 
-function getLast(array) {
-    return array[array.length - 1];
-}
-
-function trimBackticks(content) {
-    const lines = content.split('\n');
-
-    // Remove the first line if it starts with ```
-    if (lines[0].startsWith('```')) {
-        lines.shift();
-    }
-
-    // Remove the last line if it starts with ```
-    if (lines[lines.length - 1].startsWith('```')) {
-        lines.pop();
-    }
-
-    return lines.join('\n');
-}

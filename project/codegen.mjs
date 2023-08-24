@@ -16,11 +16,6 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
         throw new Error("functionCode is required");
     }
 
-    // Ensure the generatedCodeFolder exists
-    if (!fs.existsSync(generatedCodeFolder)) {
-        fs.mkdirSync(generatedCodeFolder, { recursive: true });
-    }
-
     // Save the implementation to a file in generatedCodeFolder
     const filePath = path.join(generatedCodeFolder, `${functionName}.js`);
     fs.writeFileSync(filePath, functionCode);
