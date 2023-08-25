@@ -55,24 +55,25 @@ const mainSystemMessage = `
         `;
 
 const createFunctionImplementationPrompt = `
-        Write a javascript function named {functionName} and a corresponding unit test named {functionName}Test
-        based on the following description within tripple quotes:
+        Write a JavaScript function named {functionName} and a corresponding unit test named {functionName}Test
+        based on the following description within triple quotes:
         """
         {functionDescription}
         """
         
-        Give me a complete javascript module that exports {functionName} and {functionName}Test.
-        - Use ESM syntax and import/export, not require(). 
-        - {functionName} should only take one argument, an object with named parameters.
-        - Include logging in the code so I can see what it is doing.
-        - The function should throw an error if it can't complete.
-        - {functionName}Test should take no arguments. If the test passes, it should return nothing. If it fails, it should throw an error.
-        - If {functionName}Test needs to create temporary files, it should place them in {testScratchFolder} (create the folder if missing).
-        - Use async/await for asynchronous operations, rather than callbacks.
-        - if {functionName} is async, the test should use await the result.
+        Provide a complete JavaScript module that exports both {functionName} and {functionName}Test:
+        - Use ESM syntax with import/export statements. Avoid using require().
+        - {functionName} should accept only one argument, an object with named parameters.
+        - Incorporate logging within the code to provide visibility into its operations.
+        - The function should throw an error if it encounters any issues.
+        - {functionName}Test should not take any arguments. If the test is successful, it should return nothing. If it fails, it should throw an error.
+        - If {functionName}Test needs to generate temporary files, ensure they are saved in the pre-existing directory {testScratchFolder}. Avoid using global variables like __dirname; instead, derive paths relative to the module using ESM techniques.
+        - Favor async/await over callbacks for asynchronous operations.
+        - If {functionName} is asynchronous, ensure {functionName}Test awaits its result.
         
-        Use --- as delimiter at the beginning and end of the module.
+        Use --- as a delimiter at both the beginning and end of the module.
         `;
+
 
 const createFunctionSpecPrompt = `
     Create a function spec for the code above.
