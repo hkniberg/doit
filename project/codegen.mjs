@@ -42,7 +42,7 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
     // Add detected modules to the package.json dependencies
     packageJson.dependencies = packageJson.dependencies || {};
     for (const module of requiredModules) {
-        if (!packageJson.dependencies[module]) {
+        if (!module.includes('/') && !packageJson.dependencies[module]) {
             packageJson.dependencies[module] = "*"; // Use latest version
         }
     }
