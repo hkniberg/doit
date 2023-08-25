@@ -6,6 +6,19 @@ export function createFolderIfMissing(folderPath) {
     }
 }
 
+export function removeFolderIfItExists(folderPath) {
+    if (fs.existsSync(folderPath)) {
+        fs.rmSync(folderPath, { recursive: true });
+    }
+}
+
+export function resetFolder(folderPath) {
+    if (fs.existsSync(folderPath)) {
+        fs.rmSync(folderPath, { recursive: true });
+    }
+    fs.mkdirSync(folderPath, { recursive: true });
+}
+
 export function trimBackticks(content) {
     const lines = content.split('\n');
 
