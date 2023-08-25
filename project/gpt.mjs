@@ -61,16 +61,26 @@ const createFunctionImplementationPrompt = `
         {functionDescription}
         """
         
-        Provide a complete JavaScript module that exports both {functionName} and {functionName}Test:
+        Provide a complete JavaScript module that exports {functionName}.
         - Use ESM syntax with import/export statements. Avoid using require().
         - {functionName} should accept only one argument, an object with named parameters.
         - Incorporate logging within the code to provide visibility into its operations.
         - The function should throw an error if it encounters any issues.
-        - {functionName}Test should not take any arguments. If the test is successful, it should return nothing. If it fails, it should throw an error.
-        - If {functionName}Test needs to generate temporary files, ensure they are saved in the pre-existing directory {testScratchFolder}. Avoid using global variables like __dirname; instead, derive paths relative to the module using ESM techniques.
         - Favor async/await over callbacks for asynchronous operations.
         - If {functionName} is asynchronous, ensure {functionName}Test awaits its result.
         
+        Include export unit test function {functionName}Test, but only if the test can run without external dependencies (such as http requests).
+        - {functionName}Test should not take any arguments.
+        - If the test is successful, it should return nothing.
+        - If it fails, it should throw an error and log details about which inputs and outputs were involved.
+        - If {functionName}Test needs to generate temporary files, save them in pre-existing directory {testScratchFolder}.
+        - Avoid using global variables like __dirname; instead, derive paths relative to the module using ESM techniques.
+
+        If you can't make an independent unit test, just skip {functionName}Test.
+        
+        The final output should be a complete JavaScript module that exports {functionName}
+        and optionally also {functionName}Test.
+
         Use --- as a delimiter at both the beginning and end of the module.
         `;
 
@@ -117,7 +127,7 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, test
     await testFunction(generatedCodeFolder, functionName);
 
     // Ask GPT for the function spec
-    console.log("Test passed! Asking GPT to generate a function spec...")
+    console.log("Test passed (or didn't exist). Asking GPT to generate a function spec...")
     messages.push({ role: "user", content: createFunctionSpecPrompt });
     const specResponse = await openai.chat.completions.create({model, messages});
 

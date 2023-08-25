@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import detectiveEs6 from "detective-es6";
 import {execSync} from "child_process";
+import isBuiltinModule from 'is-builtin-module'
 
 /**
  * functionCode is a string containing the code for the function.
@@ -42,7 +43,7 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
     // Add detected modules to the package.json dependencies
     packageJson.dependencies = packageJson.dependencies || {};
     for (const module of requiredModules) {
-        if (!module.includes('/') && !packageJson.dependencies[module]) {
+        if (!isBuiltinModule(module) && !packageJson.dependencies[module]) {
             packageJson.dependencies[module] = "*"; // Use latest version
         }
     }
@@ -92,6 +93,6 @@ export async function testFunction(generatedCodeFolder, functionName) {
             throw new Error(`Unit test for ${functionName} failed.`);
         }
     } else {
-        console.warn(`No unit test found for ${functionName}.`);
+        console.log(`No unit test found for ${functionName}.`);
     }
 }

@@ -13,6 +13,7 @@
     "detective": "^5.2.1",
     "detective-es6": "^4.0.1",
     "dotenv-safe": "^8.2.0",
+    "is-builtin-module": "^3.2.1",
     "openai": "^4.2.0",
     "readline-sync": "^1.4.10"
   }
