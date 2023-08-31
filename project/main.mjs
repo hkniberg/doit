@@ -1,16 +1,19 @@
 // main.mjs
-import {callGptWithDynamicFunctionCreation, initGptLog} from "./gpt.mjs";
+import readline from 'readline';
+import { callGptWithDynamicFunctionCreation, initGptLog } from "./gpt.mjs";
 import OpenAI from "openai";
-import {config} from "dotenv-safe";
-import {resetFolder} from "./util.mjs";
+import { config } from "dotenv-safe";
+import { resetFolder } from "./util.mjs";
 import path from "path";
 import fs from "fs";
+import chalk from 'chalk';
+import boxen from 'boxen';
+import ora from 'ora';
 
 config();
 const OUTPUT_FOLDER = path.resolve(process.cwd(), '..', 'output');
 
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
 
 resetFolder(path.join(OUTPUT_FOLDER, "code"));
 resetFolder(path.join(OUTPUT_FOLDER, "files"));
@@ -21,25 +24,49 @@ if (fs.existsSync(gptLogFile)) {
 initGptLog();
 
 const MODEL = "gpt-4";
-(async () => {
 
-    let prompt1 = "Create a file on my computer called ../output/files/hi.txt which contains the text 'Hello World!'"
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
 
-    let prompt2 = "Download the contents of http://kniberg.com and save to a file called ../output/files/kniberg.txt."
+const askQuestion = (query) => {
+    return new Promise((resolve) => {
+        rl.question(query, (answer) => {
+            resolve(answer);
+        });
+    });
+};
 
-    let prompt3 = "Clone the github repo https://github.com/hkniberg/test-project  " +
-        "Run it and tell me what the output is."
+const mainLoop = async () => {
+    while (true) {
+        const question = await askQuestion(chalk.green("What would you like to ask GPT-4? (Type 'exit' to quit) "));
 
-    let prompt4 = "What does https://github.com/hkniberg/test-project do?"
+        // Clear the last line and move the cursor to the start of the line
+        readline.moveCursor(process.stdout, 0, -1);
+        readline.clearLine(process.stdout, 0);
 
-    let prompt5 = "list all the files in the github project https://github.com/hkniberg/test-project, and summarize what they do."
+        if (question.toLowerCase() === 'exit') {
+            console.log(chalk.red('Exiting...'));
+            rl.close();
+            break;
+        }
 
-    let prompt6 = "What is the current time in Stockholm?"
+        // Replace the cleared line with a boxen box
+        console.log(boxen(chalk.blue(`You: ${question}`), { padding: 1, borderColor: 'green', borderStyle: 'round' }));
 
-    let prompt7 = "What kind of computer am I using?"
+        const spinner = ora('Waiting for GPT-4 response...').start();
 
-    let prompt8 = "What is the latest news from the ukraine war? Summarize in a few bullet points. Use the Google Custom Search JSON API."
+        try {
+            const result = await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, question);
+            spinner.stop();
+            process.stdin.resume();
+            console.log(boxen(chalk.blue(`GPT: ${result}`), { padding: 1, borderColor: 'cyan', borderStyle: 'round' }));
+        } catch (error) {
+            spinner.stop();
+            console.log(chalk.red('An error occurred:', error));
+        }
+    }
+};
 
-    await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, prompt8)
-})();
-
+mainLoop();
