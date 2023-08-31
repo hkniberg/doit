@@ -87,7 +87,12 @@ export const debugSystemPrompt = `
     Use --- as a delimiter at both the beginning and end of the module.
 `
 export const debugPrompt = `
-    Debug the {functionName} function. Here is the complete module:
+    Debug the {functionName} function.
+    
+    Here is the function spec:
+    {functionSpec}
+    
+    Here is the complete module:
     ---
     {moduleCode}
     ---
@@ -99,6 +104,7 @@ export const debugPrompt = `
     {functionError}
 
     Please provide a complete new version of this module, where the bug is fixed.
+    Make sure the implementation obeys the function spec.
     
     Follow this code style: 
     {codeStyle} 

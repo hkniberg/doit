@@ -1,9 +1,10 @@
 // main.mjs
-import {callGptWithDynamicFunctionCreation} from "./gpt.mjs";
+import {callGptWithDynamicFunctionCreation, initGptLog} from "./gpt.mjs";
 import OpenAI from "openai";
 import {config} from "dotenv-safe";
 import {resetFolder} from "./util.mjs";
 import path from "path";
+import fs from "fs";
 
 config();
 const OUTPUT_FOLDER = path.resolve(process.cwd(), '..', 'output');
@@ -13,6 +14,11 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY});
 
 resetFolder(path.join(OUTPUT_FOLDER, "code"));
 resetFolder(path.join(OUTPUT_FOLDER, "files"));
+let gptLogFile = path.join(process.cwd(), "gpt.log.html");
+if (fs.existsSync(gptLogFile)) {
+    fs.rmSync(gptLogFile);
+}
+initGptLog();
 
 const MODEL = "gpt-4";
 (async () => {
