@@ -39,15 +39,6 @@ async function askGptToDebugFunction(openai, model, generatedCodeFolder, functio
     const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
     const moduleCode = fs.readFileSync(modulePath, 'utf-8');
 
-    // Rename the old version of the file
-    let counter = 1;
-    let newFileName = `${functionName}-broken${counter}.mjs`;
-    while (fs.existsSync(path.join(generatedCodeFolder, newFileName))) {
-        counter++;
-        newFileName = `${functionName}-broken${counter}.mjs`;
-    }
-    fs.renameSync(modulePath, path.join(generatedCodeFolder, newFileName));
-
     // Create a debug prompt for GPT to fix the function
     const userMessage = prompts.debugPrompt
         .replace('{functionName}', functionName)

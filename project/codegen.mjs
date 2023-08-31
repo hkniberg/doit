@@ -10,7 +10,7 @@ import isBuiltinModule from 'is-builtin-module'
  * Should use ESM syntax with import/export instead of require.
  */
 export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, functionCode) {
-    console.log("saveFunctionAndUpdateDependencies", generatedCodeFolder, functionName)
+    console.log("saveFunctionAndUpdateDependencies", generatedCodeFolder, functionName);
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -21,9 +21,12 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
         throw new Error("functionCode is required");
     }
 
+    const nextVersion = getNextModuleVersion(generatedCodeFolder, functionName);
+    const filePath = getModulePath(generatedCodeFolder, functionName, nextVersion);
+
     // Save the implementation to a file in generatedCodeFolder
-    const filePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
     fs.writeFileSync(filePath, functionCode);
+    console.log(`Saved function ${functionName} to ${filePath}`);
 
     // Create or update package.json in that folder
     const packageJsonPath = path.join(generatedCodeFolder, 'package.json');
@@ -68,13 +71,16 @@ export async function callFunction(generatedCodeFolder, functionName, functionAr
         throw new Error("functionArgs is required");
     }
 
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
+    const latestVersion = getLatestModuleVersion(generatedCodeFolder, functionName);
+    if (latestVersion === null) {
+        throw new Error(`No versions found for function ${functionName}`);
+    }
 
-    // print the file contents to the console
-    console.log("Function module contents:", fs.readFileSync(modulePath, 'utf8'));
+    const latestModulePath = getModulePath(generatedCodeFolder, functionName, latestVersion);
 
+    console.log("Function module file: " + latestModulePath);
 
-    const module = await import(modulePath);
+    const module = await import(latestModulePath);
     const importedFunction = module[`${functionName}`];
     return importedFunction(functionArgs);
 }
@@ -106,3 +112,33 @@ export async function testFunction(generatedCodeFolder, functionName) {
 
      */
 }
+
+export function getLatestModuleVersion(generatedCodeFolder, functionName) {
+    let currentVersion = null;
+
+    const files = fs.readdirSync(generatedCodeFolder);
+    for (const file of files) {
+        const match = file.match(new RegExp(`^${functionName}(\\d*)\\.mjs$`));
+        if (match) {
+            const version = match[1] ? parseInt(match[1], 10) : 1; // Default to 1 if no version number is found
+            currentVersion = Math.max(currentVersion === null ? 0 : currentVersion, version);
+        }
+    }
+
+    return currentVersion;
+}
+
+export function getNextModuleVersion(generatedCodeFolder, functionName) {
+    const currentVersion = getLatestModuleVersion(generatedCodeFolder, functionName);
+    return currentVersion === null ? 1 : currentVersion + 1;
+}
+
+export function getModulePath(generatedCodeFolder, functionName, versionNumber) {
+    // Handle the special case where the first version doesn't have a number
+    const fileName = versionNumber === 1 ? `${functionName}.mjs` : `${functionName}${versionNumber}.mjs`;
+    return path.join(generatedCodeFolder, fileName);
+}
+
+
+
+
