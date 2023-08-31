@@ -7,8 +7,7 @@ import { resetFolder } from "./util.mjs";
 import path from "path";
 import fs from "fs";
 import chalk from 'chalk';
-import boxen from 'boxen';
-import ora from 'ora';
+import {UIHelper} from "./ui.mjs";
 
 config();
 const OUTPUT_FOLDER = path.resolve(process.cwd(), '..', 'output');
@@ -25,46 +24,33 @@ initGptLog();
 
 const MODEL = "gpt-4";
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
 
-const askQuestion = (query) => {
-    return new Promise((resolve) => {
-        rl.question(query, (answer) => {
-            resolve(answer);
-        });
-    });
-};
+const ui = new UIHelper();
 
 const mainLoop = async () => {
-    while (true) {
-        const question = await askQuestion(chalk.green("What would you like to ask GPT-4? (Type 'exit' to quit) "));
 
-        // Clear the last line and move the cursor to the start of the line
-        readline.moveCursor(process.stdout, 0, -1);
-        readline.clearLine(process.stdout, 0);
+    while (true) {
+        const question = await ui.ask("What would you like to ask GPT-4? (Type 'exit' to quit) ");
+
+        ui.removePreviousLine();
 
         if (question.toLowerCase() === 'exit') {
-            console.log(chalk.red('Exiting...'));
-            rl.close();
+            ui.drawBox('red', 'white', 'Exiting...');
+            ui.close();
             break;
         }
 
-        // Replace the cleared line with a boxen box
-        console.log(boxen(chalk.blue(`You: ${question}`), { padding: 1, borderColor: 'green', borderStyle: 'round' }));
+        ui.drawBox('green', 'blue', `You: ${question}`);
 
-        const spinner = ora('Waiting for GPT-4 response...').start();
+        ui.startSpinner('Waiting for GPT-4 response');
 
         try {
             const result = await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, question);
-            spinner.stop();
-            process.stdin.resume();
-            console.log(boxen(chalk.blue(`GPT: ${result}`), { padding: 1, borderColor: 'cyan', borderStyle: 'round' }));
+            ui.stopSpinner();
+            ui.drawBox('magenta', 'blue', `GPT: ${result}`);
         } catch (error) {
-            spinner.stop();
-            console.log(chalk.red('An error occurred:', error));
+            ui.stopSpinner();
+            ui.drawBox('red', 'white', `An error occurred: ${error}`);
         }
     }
 };
