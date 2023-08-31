@@ -38,6 +38,19 @@ export const mainSystemMessage = `
         Use the given function requestFunction() function to describe what you need,
         and I will make sure those functions are available to you in the next message.
         After you have all the functions you need, respond to the original prompt.
+        
+        Only request functions for things that you can't do yourself. 
+        
+        Example 1: If I ask you to summarize a web page, don't ask for a function to summarize a web page.
+        Instead, ask for a function to access a web page (since you can't do that yourself), and then you
+        do the summarizing. That way we keep the functions as small and simple as possible.
+        
+        Example 2: If I ask you about current events in the world that have happened after your cutoff, you
+        can request a function to search the web, and then you can summarize and interpret the results yourself.
+        
+        If you need information from the user, for example an API key for a third-party service, you can
+        request a function to prompt the user for that information.
+        Functions should never make any assumptions about local environment variables or config files.  
         `;
 export let codeStyle = `        
         - Use ESM syntax with import/export statements. Avoid using require().
@@ -45,7 +58,10 @@ export let codeStyle = `
         - Incorporate logging within the code to provide visibility into its operations.
         - The function should throw an error if it encounters any issues.
         - Favor async/await over callbacks for asynchronous operations.
-        - Treat any file paths as relative to current working dir, not relative to the module. DOn't use __dirname.
+        - Treat any file paths as relative to current working dir, not relative to the module. Don't use __dirname.
+        - Use packages whenever possible. Avoid writing your own code for common tasks.
+        - If the function needs user-specific information, for example a password or an API key for a third-party service, you can
+          prompt the user for that information. Functions should never make any assumptions about local environment variables or config files.  
 `;
 export const createFunctionImplementationPrompt = `
         Write a JavaScript function named {functionName} and a corresponding unit test named {functionName}Test

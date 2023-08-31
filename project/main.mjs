@@ -34,6 +34,12 @@ const MODEL = "gpt-4";
 
     let prompt5 = "list all the files in the github project https://github.com/hkniberg/test-project, and summarize what they do."
 
-    await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, prompt5)
+    let prompt6 = "What is the current time in Stockholm?"
+
+    let prompt7 = "What kind of computer am I using?"
+
+    let prompt8 = "What is the latest news from the ukraine war? Summarize in a few bullet points. Use the Google Custom Search JSON API."
+
+    await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, prompt8)
 })();
 
