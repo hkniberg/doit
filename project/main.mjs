@@ -1,12 +1,10 @@
 // main.mjs
-import readline from 'readline';
-import { callGptWithDynamicFunctionCreation, initGptLog } from "./gpt.mjs";
+import {callGptWithDynamicFunctionCreation, initGptLog} from "./gpt.mjs";
 import OpenAI from "openai";
-import { config } from "dotenv-safe";
-import { resetFolder } from "./util.mjs";
+import {config} from "dotenv-safe";
+import {resetFolder} from "./util.mjs";
 import path from "path";
 import fs from "fs";
-import chalk from 'chalk';
 import {UIHelper} from "./ui.mjs";
 
 config();
@@ -22,8 +20,7 @@ if (fs.existsSync(gptLogFile)) {
 }
 initGptLog();
 
-const MODEL = "gpt-4";
-
+const MODEL = process.env.MODEL;
 
 const ui = new UIHelper();
 
