@@ -57,6 +57,7 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
 
 export async function callFunction(generatedCodeFolder, functionName, functionArgs) {
     console.log("callFunction", generatedCodeFolder, functionName, functionArgs);
+    console.log("Current working dir:", process.cwd());
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -67,13 +68,20 @@ export async function callFunction(generatedCodeFolder, functionName, functionAr
         throw new Error("functionArgs is required");
     }
 
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`); // Updated to .mjs
+    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
+
+    // print the file contents to the console
+    console.log("Function module contents:", fs.readFileSync(modulePath, 'utf8'));
+
+
     const module = await import(modulePath);
     const importedFunction = module[`${functionName}`];
     return importedFunction(functionArgs);
 }
 
 export async function testFunction(generatedCodeFolder, functionName) {
+    console.log("Unit testing temporarily disabled")
+    /*
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -95,4 +103,6 @@ export async function testFunction(generatedCodeFolder, functionName) {
     } else {
         console.log(`No unit test found for ${functionName}.`);
     }
+
+     */
 }

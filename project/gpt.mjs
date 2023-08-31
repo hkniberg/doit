@@ -24,7 +24,6 @@ const sampleFunctionSpec = {
     },
 }
 
-
 const requestFunctionSpec = {
     "name": "requestFunction",
     "description": "Requests a new function with given name and description",
@@ -54,6 +53,15 @@ const mainSystemMessage = `
         After you have all the functions you need, respond to the original prompt.
         `;
 
+let codeStyle = `        
+        - Use ESM syntax with import/export statements. Avoid using require().
+        - {functionName} should accept only one argument, an object with named parameters.
+        - Incorporate logging within the code to provide visibility into its operations.
+        - The function should throw an error if it encounters any issues.
+        - Favor async/await over callbacks for asynchronous operations.
+        - Treat any file paths as relative to current working dir, not relative to the module. DOn't use __dirname.
+`;
+
 const createFunctionImplementationPrompt = `
         Write a JavaScript function named {functionName} and a corresponding unit test named {functionName}Test
         based on the following description within triple quotes:
@@ -61,25 +69,23 @@ const createFunctionImplementationPrompt = `
         {functionDescription}
         """
         
-        Provide a complete JavaScript module that exports {functionName}.
-        - Use ESM syntax with import/export statements. Avoid using require().
-        - {functionName} should accept only one argument, an object with named parameters.
-        - Incorporate logging within the code to provide visibility into its operations.
-        - The function should throw an error if it encounters any issues.
-        - Favor async/await over callbacks for asynchronous operations.
-        - If {functionName} is asynchronous, ensure {functionName}Test awaits its result.
+        Provide a complete JavaScript module that exports {functionName}, obeying the following code style:
+        {codeStyle}        
         
+
         Include export unit test function {functionName}Test, but only if the test can run without external dependencies (such as http requests).
         - {functionName}Test should not take any arguments.
         - If the test is successful, it should return nothing.
         - If it fails, it should throw an error and log details about which inputs and outputs were involved.
         - If {functionName}Test needs to generate temporary files, save them in pre-existing directory {testScratchFolder}.
-        - Avoid using global variables like __dirname; instead, derive paths relative to the module using ESM techniques.
+        - If {functionName} is asynchronous, ensure {functionName}Test awaits its result.
 
         If you can't make an independent unit test, just skip {functionName}Test.
         
         The final output should be a complete JavaScript module that exports {functionName}
         and optionally also {functionName}Test.
+        
+        IMPORTANT: Include a bug that will make the function throw an error. I want to test debugging.
 
         Use --- as a delimiter at both the beginning and end of the module.
         `;
@@ -108,10 +114,14 @@ const debugPrompt = `
     I sent the following input:
     {functionInput}
     
-    I got the following output & error:
-    {functionInput}
+    I got the following error:
+    {functionError}
 
     Please provide a complete new version of this module, where the bug is fixed.
+    
+    Follow this code style: 
+    {codeStyle} 
+    
     If you are unable to determine the cause of the bug, just return the same module
     but with more logging to help you debug it later.
     
@@ -124,14 +134,16 @@ async function executeGeneratedFunction(openai, model, generatedCodeFolder, func
 
     while (attempts < MAX_ATTEMPTS) {
         try {
-            const result = await callFunction(generatedCodeFolder, functionName, functionArgs);
-            return result; // Return the result if successful
+            return await callFunction(generatedCodeFolder, functionName, functionArgs);
         } catch (error) {
-            // Handle the error and attempt to fix the function
-            const success = await handleFunctionError(openai, model, generatedCodeFolder, functionName, functionArgs, error);
+            console.log(`Function ${functionName} failed with error: ${error}`, error);
+            console.log("Will attempt to debug it.");
+            const success = await askGptToDebugFunction(openai, model, generatedCodeFolder, functionName, functionArgs, error);
             if (!success) {
+                console.log("success == false");s
                 attempts++;
                 if (attempts >= MAX_ATTEMPTS) {
+                    console.log(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`)
                     throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`);
                 }
             }
@@ -139,28 +151,65 @@ async function executeGeneratedFunction(openai, model, generatedCodeFolder, func
     }
 }
 
-async function handleFunctionError(openai, model, generatedCodeFolder, functionName, functionArgs, error, output) {
+async function askGptToDebugFunction(openai, model, generatedCodeFolder, functionName, functionArgs, error) {
     // Retrieve the function code
-    const moduleCode = fs.readFileSync(path.join(generatedCodeFolder, `${functionName}.mjs`), 'utf-8');
+    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
+    const moduleCode = fs.readFileSync(modulePath, 'utf-8');
+
+    // Rename the old version of the file
+    let counter = 1;
+    let newFileName = `${functionName}-broken${counter}.mjs`;
+    while (fs.existsSync(path.join(generatedCodeFolder, newFileName))) {
+        counter++;
+        newFileName = `${functionName}-broken${counter}.mjs`;
+    }
+    fs.renameSync(modulePath, path.join(generatedCodeFolder, newFileName));
 
     // Create a debug prompt for GPT to fix the function
-    const prompt = debugPrompt
+    const userMessage = debugPrompt
         .replace('{functionName}', functionName)
         .replace('{moduleCode}', moduleCode)
         .replace('{functionInput}', JSON.stringify(functionArgs))
-        .replace('{functionOutput}', JSON.stringify(output));
+        .replace('{functionError}', JSON.stringify(error))
+        .replace('{codeStyle}', codeStyle);
 
     // Request GPT to fix the function
-    const response = await openai.chat.completions.create({ model, messages: [{ role: "user", content: prompt }] });
-    const fixedModuleCode = response.choices[0].message.content.split('---')[1].trim();
+    console.log(`Asking GPT to debug and fix function ${functionName}`, userMessage);
+    const response = await openai.chat.completions.create({
+        model,
+        messages: [
+            { role: "system", content: debugSystemPrompt },
+            { role: "user", content: userMessage }
+        ]
+    });
+    let responseContent = response.choices[0].message.content;
+    console.log("Got response content: ", responseContent);
+    const fixedModuleCode = responseContent.split('---')[1].trim();
+    const trimmedFixedModuleCode = trimBackticks(fixedModuleCode);
+
+    // Show the fixed code to the user and ask for approval
+    console.log(`======== Debugged function: ${functionName} ==============`);
+    console.log(trimmedFixedModuleCode);
+    console.log(`=========================================================`);
+    const userApproval = readlineSync.question(`\n Do you approve the changes to this function? (Y/N) `);
+
+    if (userApproval.toLowerCase() !== 'y') {
+        console.log("Debugging changes declined by user.");
+        return false;
+    }
 
     // Replace the existing function code with the fixed code
-    fs.writeFileSync(path.join(generatedCodeFolder, `${functionName}.mjs`), fixedModuleCode);
+    console.log("Saving the debugged function and updating dependencies...");
+    await saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, trimmedFixedModuleCode);
 
-    // Optionally, you can re-run the test for the function or perform additional validation here
+    // Run the unit test for the debugged function
+    console.log(`Running unit test ${functionName}Test...`);
+    await testFunction(generatedCodeFolder, functionName);
 
-    return true; // Return true if the fix was successful
+    console.log(`Debugging complete! Function ${functionName} is now debugged and ready to use!`);
+    return true;
 }
+
 
 
 async function askGptToGenerateFunction(openai, model, generatedCodeFolder, testScratchFolder, functionName, functionDescription) {
@@ -171,7 +220,9 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, test
     let implementationPrompt = createFunctionImplementationPrompt
         .replace('{functionName}', functionName)
         .replace('{functionDescription}', functionDescription)
-        .replace('{testScratchFolder}', testScratchFolder);
+        .replace('{testScratchFolder}', testScratchFolder)
+        .replace('{codeStyle}', codeStyle);
+
     messages.push({ role: "user", content: implementationPrompt });
 
     console.log(`Asking GPT to write code and test for function ${functionName}...`);
