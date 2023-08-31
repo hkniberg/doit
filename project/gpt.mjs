@@ -93,6 +93,76 @@ const createFunctionSpecPrompt = `
     Use --- as delimiter at the beginning and end of the function spec.
 `;
 
+const debugSystemPrompt = `
+    You are a master debugger. When you are asked to fix a function, you always return
+    a complete new module with the fixed function code. 
+    Use --- as a delimiter at both the beginning and end of the module.
+`
+
+const debugPrompt = `
+    Debug the {functionName} function. Here is the complete module:
+    ---
+    {moduleCode}
+    ---
+
+    I sent the following input:
+    {functionInput}
+    
+    I got the following output & error:
+    {functionInput}
+
+    Please provide a complete new version of this module, where the bug is fixed.
+    If you are unable to determine the cause of the bug, just return the same module
+    but with more logging to help you debug it later.
+    
+    Use --- as a delimiter at both the beginning and end of the module.
+  `;
+
+async function executeGeneratedFunction(openai, model, generatedCodeFolder, functionName, functionArgs) {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 3;
+
+    while (attempts < MAX_ATTEMPTS) {
+        try {
+            const result = await callFunction(generatedCodeFolder, functionName, functionArgs);
+            return result; // Return the result if successful
+        } catch (error) {
+            // Handle the error and attempt to fix the function
+            const success = await handleFunctionError(openai, model, generatedCodeFolder, functionName, functionArgs, error);
+            if (!success) {
+                attempts++;
+                if (attempts >= MAX_ATTEMPTS) {
+                    throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`);
+                }
+            }
+        }
+    }
+}
+
+async function handleFunctionError(openai, model, generatedCodeFolder, functionName, functionArgs, error, output) {
+    // Retrieve the function code
+    const moduleCode = fs.readFileSync(path.join(generatedCodeFolder, `${functionName}.mjs`), 'utf-8');
+
+    // Create a debug prompt for GPT to fix the function
+    const prompt = debugPrompt
+        .replace('{functionName}', functionName)
+        .replace('{moduleCode}', moduleCode)
+        .replace('{functionInput}', JSON.stringify(functionArgs))
+        .replace('{functionOutput}', JSON.stringify(output));
+
+    // Request GPT to fix the function
+    const response = await openai.chat.completions.create({ model, messages: [{ role: "user", content: prompt }] });
+    const fixedModuleCode = response.choices[0].message.content.split('---')[1].trim();
+
+    // Replace the existing function code with the fixed code
+    fs.writeFileSync(path.join(generatedCodeFolder, `${functionName}.mjs`), fixedModuleCode);
+
+    // Optionally, you can re-run the test for the function or perform additional validation here
+
+    return true; // Return true if the fix was successful
+}
+
+
 async function askGptToGenerateFunction(openai, model, generatedCodeFolder, testScratchFolder, functionName, functionDescription) {
     let messages = [
         { role: "system", content: "You are an awesome javascript coding genius" },
@@ -188,7 +258,7 @@ export async function callGptWithDynamicFunctionCreation(openai, model, outputFo
                 functionSpecs.push(generatedFunctionSpec);
                 messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." });
             } else {
-                const result = await callFunction(generatedCodeFolder, functionName, functionArgs);
+                const result = await executeGeneratedFunction(openai, model, generatedCodeFolder, functionName, functionArgs);
                 const resultDescription = result !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
                 messages.push({ role: "function", name: functionName, content: resultDescription });
             }
