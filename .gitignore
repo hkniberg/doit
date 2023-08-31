@@ -5,4 +5,5 @@ node_modules
 output
 test-scratch
 temp
+project/gpt.log.html
 
