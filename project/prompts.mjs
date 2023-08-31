@@ -70,8 +70,6 @@ export const createFunctionImplementationPrompt = `
         The final output should be a complete JavaScript module that exports {functionName}
         and optionally also {functionName}Test.
         
-        IMPORTANT: Include a bug that will make the function throw an error. I want to test debugging.
-
         Use --- as a delimiter at both the beginning and end of the module.
         `;
 export const createFunctionSpecPrompt = `
