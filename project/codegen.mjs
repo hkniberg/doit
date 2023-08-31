@@ -4,13 +4,14 @@ import path from "path";
 import detectiveEs6 from "detective-es6";
 import {execSync} from "child_process";
 import isBuiltinModule from 'is-builtin-module'
+import * as log from "./htmllog.mjs";
 
 /**
  * functionCode is a string containing the code for the function.
  * Should use ESM syntax with import/export instead of require.
+ * Returns the file name.
  */
 export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, functionCode) {
-    console.log("saveFunctionAndUpdateDependencies", generatedCodeFolder, functionName);
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -20,13 +21,15 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
     if (!functionCode) {
         throw new Error("functionCode is required");
     }
+    if (typeof functionCode !== "string") {
+        throw new Error("functionCode must be a string");
+    }
 
     const nextVersion = getNextModuleVersion(generatedCodeFolder, functionName);
     const filePath = getModulePath(generatedCodeFolder, functionName, nextVersion);
 
     // Save the implementation to a file in generatedCodeFolder
     fs.writeFileSync(filePath, functionCode);
-    console.log(`Saved function ${functionName} to ${filePath}`);
 
     // Create or update package.json in that folder
     const packageJsonPath = path.join(generatedCodeFolder, 'package.json');
@@ -56,11 +59,28 @@ export function saveFunctionAndUpdateDependencies(generatedCodeFolder, functionN
 
     // Run npm install in that folder
     execSync('npm install', { cwd: generatedCodeFolder, stdio: 'inherit' });
+
+    return filePath;
+}
+
+export async function getLatestModuleCode(generatedCodeFolder, functionName) {
+    if (!generatedCodeFolder) {
+        throw new Error("generatedCodeFolder is required");
+    }
+    if (!functionName) {
+        throw new Error("functionName is required");
+    }
+
+    const latestVersion = getLatestModuleVersion(generatedCodeFolder, functionName);
+    if (latestVersion === null) {
+        throw new Error(`No versions found for function ${functionName}`);
+    }
+
+    const latestModulePath = getModulePath(generatedCodeFolder, functionName, latestVersion);
+    return fs.readFileSync(latestModulePath, 'utf8');
 }
 
 export async function callFunction(generatedCodeFolder, functionName, functionArgs) {
-    console.log("callFunction", generatedCodeFolder, functionName, functionArgs);
-    console.log("Current working dir:", process.cwd());
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -78,39 +98,9 @@ export async function callFunction(generatedCodeFolder, functionName, functionAr
 
     const latestModulePath = getModulePath(generatedCodeFolder, functionName, latestVersion);
 
-    console.log("Function module file: " + latestModulePath);
-
     const module = await import(latestModulePath);
-    const importedFunction = module[`${functionName}`];
+    const importedFunction = module[functionName];
     return importedFunction(functionArgs);
-}
-
-export async function testFunction(generatedCodeFolder, functionName) {
-    console.log("Unit testing temporarily disabled")
-    /*
-    if (!generatedCodeFolder) {
-        throw new Error("generatedCodeFolder is required");
-    }
-    if (!functionName) {
-        throw new Error("functionName is required");
-    }
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`); // Updated to .mjs
-    const module = await import(modulePath);
-    const unitTestFunction = module[`${functionName}Test`];
-
-    if (typeof unitTestFunction === 'function') {
-        try {
-            unitTestFunction();
-            console.log(`Unit test for ${functionName} passed.`);
-        } catch (error) {
-            console.error(`Unit test for ${functionName} failed.`, error);
-            throw new Error(`Unit test for ${functionName} failed.`);
-        }
-    } else {
-        console.log(`No unit test found for ${functionName}.`);
-    }
-
-     */
 }
 
 export function getLatestModuleVersion(generatedCodeFolder, functionName) {

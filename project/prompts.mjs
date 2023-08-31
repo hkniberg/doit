@@ -34,11 +34,12 @@ export const requestFunctionSpec = {
 }
 export const mainSystemMessage = `
         You are an assistant with the ability to dynamically request new functions.
-        Before responding to a new prompt, figure out which functions you will need to complete the task.
+        
+        Before responding to a new prompt, figure out if you need any functions to complete the task.
         Use the given function requestFunction() function to describe what you need,
         and I will make sure those functions are available to you in the next message.
-        After you have all the functions you need, respond to the original prompt.
         
+        Only request a new function if you don't already have a function that can do the job.
         Only request functions for things that you can't do yourself. 
         
         Example 1: If I ask you to summarize a web page, don't ask for a function to summarize a web page.
@@ -49,8 +50,10 @@ export const mainSystemMessage = `
         can request a function to search the web, and then you can summarize and interpret the results yourself.
         
         If you need information from the user, for example an API key for a third-party service, you can
-        request a function to prompt the user for that information.
-        Functions should never make any assumptions about local environment variables or config files.  
+        should ask the user for that information and then send it to the function. 
+        Don't rely on process.env or any other local environment variables or config files.
+        
+         After you have all the functions and information you need, respond to the original prompt.
         `;
 export let codeStyle = `        
         - Use ESM syntax with import/export statements. Avoid using require().
@@ -60,31 +63,23 @@ export let codeStyle = `
         - Favor async/await over callbacks for asynchronous operations.
         - Treat any file paths as relative to current working dir, not relative to the module. Don't use __dirname.
         - Use packages whenever possible. Avoid writing your own code for common tasks.
-        - If the function needs user-specific information, for example a password or an API key for a third-party service, you can
-          prompt the user for that information. Functions should never make any assumptions about local environment variables or config files.  
+        - If the function needs user-specific information or environment-specific information,
+          for example a password or an API key for a third-party service, 
+          then that should be passed in as parameters to the function,
+          and the assistant should ask the user about this information before calling the function. 
+          Don't prompt the user from inside the function, and rely on hardcoded values, config files, or environment variables. 
 `;
 export const createFunctionImplementationPrompt = `
-        Write a JavaScript function named {functionName} and a corresponding unit test named {functionName}Test
+        Write a JavaScript function named {functionName}
         based on the following description within triple quotes:
         """
         {functionDescription}
         """
         
-        Provide a complete JavaScript module that exports {functionName}, obeying the following code style:
+        Provide a complete JavaScript module that exports {functionName}, obeying the following code rules:
         {codeStyle}        
-        
-
-        Include export unit test function {functionName}Test, but only if the test can run without external dependencies (such as http requests).
-        - {functionName}Test should not take any arguments.
-        - If the test is successful, it should return nothing.
-        - If it fails, it should throw an error and log details about which inputs and outputs were involved.
-        - If {functionName}Test needs to generate temporary files, save them in pre-existing directory {testScratchFolder}.
-        - If {functionName} is asynchronous, ensure {functionName}Test awaits its result.
-
-        If you can't make an independent unit test, just skip {functionName}Test.
-        
+                
         The final output should be a complete JavaScript module that exports {functionName}
-        and optionally also {functionName}Test.
         
         Use --- as a delimiter at both the beginning and end of the module.
         `;
@@ -120,7 +115,7 @@ export const debugPrompt = `
     Please provide a complete new version of this module, where the bug is fixed.
     Make sure the implementation obeys the function spec.
     
-    Follow this code style: 
+    Follow this code rules: 
     {codeStyle} 
     
     If you are unable to determine the cause of the bug, just return the same module

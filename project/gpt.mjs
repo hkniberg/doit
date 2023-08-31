@@ -1,58 +1,52 @@
 // gpt.mjs
-import {callFunction, saveFunctionAndUpdateDependencies, testFunction} from "./codegen.mjs";
+import {
+    callFunction,
+    getLatestModuleCode,
+    getModulePath,
+    getNextModuleVersion,
+    saveFunctionAndUpdateDependencies
+} from "./codegen.mjs";
 import readlineSync from 'readline-sync';
 import path from "path";
-import {createFolderIfMissing, getLast, trimBackticks} from "./util.mjs";
+import {createFolderIfMissing, resetFolder, trimBackticks} from "./util.mjs";
 import fs from "fs";
 import * as prompts from "./prompts.mjs";
+import * as log from "./htmllog.mjs";
+import ui from "./ui.mjs";
 
 // All these will be relative to the output folder
-const TEST_SCRATCH_FOLDER_NAME='test-scratch';
 const CODE_FOLDER_NAME='code';
+const QUARANTINE_FOLDER_NAME='quarantine';
 
-async function executeGeneratedFunction(openai, model, generatedCodeFolder, functionName, functionArgs) {
+async function executeGeneratedFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs) {
     let attempts = 0;
     const MAX_ATTEMPTS = 3;
 
     while (attempts < MAX_ATTEMPTS) {
         try {
-            return await callFunction(generatedCodeFolder, functionName, functionArgs);
+            ui.startSpinner(`Running function ${functionName} with args ${JSON.stringify(functionArgs)}`)
+            const result = await callFunction(codeFolder, functionName, functionArgs);
+            ui.stopSpinnerWithCheckmark();
+            return result;
         } catch (error) {
-            console.log(`Function ${functionName} failed with error: ${error}`, error);
-            console.log("Will attempt to debug it.");
-            const success = await askGptToDebugFunction(openai, model, generatedCodeFolder, functionName, functionArgs, error);
-            if (!success) {
-                console.log("success == false");
-                attempts++;
-                if (attempts >= MAX_ATTEMPTS) {
-                    console.log(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`)
-                    throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`);
-                }
+            ui.stopSpinnerWithCross();
+            log.error(error);
+            attempts++;
+            if (attempts >= MAX_ATTEMPTS) {
+                throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`);
             }
+
+            await askGptToDebugFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs, error);
         }
     }
 }
 
-// Function to initialize the log file with CSS styles
-export function initGptLog() {
-    const cssStyles = `<style>
-                        pre {
-                            white-space: pre-wrap;       
-                            white-space: -moz-pre-wrap;  
-                            white-space: -o-pre-wrap;    
-                            word-wrap: break-word;       
-                        }
-                       </style>`;
-    fs.writeFileSync(path.join(process.cwd(), 'gpt.log.html'), cssStyles);
-}
-
-async function askGptToDebugFunction(openai, model, generatedCodeFolder, functionName, functionArgs, error) {
+async function askGptToDebugFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs, error) {
     // Retrieve the function code
-    const modulePath = path.join(generatedCodeFolder, `${functionName}.mjs`);
-    const moduleCode = fs.readFileSync(modulePath, 'utf-8');
+    const moduleCode = await getLatestModuleCode(codeFolder, functionName);
 
     // load the function spec
-    const functionSpec = fs.readFileSync(path.join(generatedCodeFolder, `${functionName}.json`), 'utf-8');
+    const functionSpec = fs.readFileSync(path.join(codeFolder, `${functionName}.json`), 'utf-8');
 
     // Create a debug prompt for GPT to fix the function
     const userMessage = prompts.debugPrompt
@@ -64,42 +58,25 @@ async function askGptToDebugFunction(openai, model, generatedCodeFolder, functio
         .replace('{functionError}', JSON.stringify(error));
 
     // Request GPT to fix the function
-    console.log(`Asking GPT to debug and fix function ${functionName}`, userMessage);
+    ui.startSpinner("Damn. It failed. Asking GPT to code up a new debugged version of it.");
     const response = await callOpenAICompletions(openai, model, [
         { role: "system", content: prompts.debugSystemPrompt },
         { role: "user", content: userMessage }
     ]);
     let responseContent = response.message;
-    console.log("Got response content: ", responseContent);
     const fixedModuleCode = responseContent.content.split('---')[1].trim();
     const trimmedFixedModuleCode = trimBackticks(fixedModuleCode);
+    ui.stopSpinnerWithCheckmark();
 
-    // Show the fixed code to the user and ask for approval
-    console.log(`======== Debugged function: ${functionName} ==============`);
-    console.log(trimmedFixedModuleCode);
-    console.log(`=========================================================`);
-    const userApproval = readlineSync.question(`\n Do you approve the changes to this function? (Y/N) `);
-
-    if (userApproval.toLowerCase() !== 'y') {
-        console.log("Debugging changes declined by user.");
-        return false;
-    }
+    const possiblyUpdatedModuleCode = await verifyThatCodeIsSafe(codeFolder, quarantineFolder, functionName, trimmedFixedModuleCode);
 
     // Replace the existing function code with the fixed code
-    console.log("Saving the debugged function and updating dependencies...");
-    await saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, trimmedFixedModuleCode);
-
-    // Run the unit test for the debugged function
-    console.log(`Running unit test ${functionName}Test...`);
-    await testFunction(generatedCodeFolder, functionName);
-
-    console.log(`Debugging complete! Function ${functionName} is now debugged and ready to use!`);
-    return true;
+    ui.startSpinner("Installing the debugged function");
+    await saveFunctionAndUpdateDependencies(codeFolder, functionName, possiblyUpdatedModuleCode);
+    ui.stopSpinnerWithCheckmark();
 }
 
-
-
-async function askGptToGenerateFunction(openai, model, generatedCodeFolder, testScratchFolder, functionName, functionDescription) {
+async function askGptToGenerateFunction(openai, model, codeFolder, quarantineFolder, functionName, functionDescription) {
     let messages = [
         { role: "system", content: "You are an awesome javascript coding genius" },
     ];
@@ -107,74 +84,73 @@ async function askGptToGenerateFunction(openai, model, generatedCodeFolder, test
     let implementationPrompt = prompts.createFunctionImplementationPrompt
         .replace('{codeStyle}', prompts.codeStyle)
         .replaceAll('{functionName}', functionName)
-        .replace('{functionDescription}', functionDescription)
-        .replaceAll('{testScratchFolder}', testScratchFolder);
+        .replace('{functionDescription}', functionDescription);
 
     messages.push({ role: "user", content: implementationPrompt });
 
-    console.log(`Asking GPT to write code and test for function ${functionName}...`);
+    ui.startSpinner("GPT requested a function called " + functionName + ". Asking GPT to code it up.");
+
     const implementationResponse = await callOpenAICompletions(openai, model, messages, null);
     const functionCode = implementationResponse.message.content.split('---')[1].trim();
+    let trimmedFunctionCode = trimBackticks(functionCode);
+    ui.stopSpinnerWithCheckmark();
 
-    const trimmedFunctionCode = trimBackticks(functionCode);
+    // clear the quarantine folder and add this function to it
+    const possiblyUpdatedFunctionCode = await verifyThatCodeIsSafe(codeFolder, quarantineFolder, functionName, trimmedFunctionCode);
 
-    // Show the generated code to the user and ask for approval
-    console.log(`======== Generated function: ${functionName} ==============`);
-    console.log(trimmedFunctionCode);
-    console.log(`===========================================================`);
-    const userApproval = readlineSync.question(`\n Do you approve the creation of this function? (Y/N) `);
+    ui.startSpinner("Installing the function");
+    // TODO error handling here, ask GPT to debug if this fails
+    await saveFunctionAndUpdateDependencies(codeFolder, functionName, possiblyUpdatedFunctionCode);
+    ui.stopSpinnerWithCheckmark();
 
-    if (userApproval.toLowerCase() !== 'y') {
-        throw new Error("Function creation declined by user.");
-    }
-
-    console.log("Saving the function and updating dependencies...")
-    await saveFunctionAndUpdateDependencies(generatedCodeFolder, functionName, trimmedFunctionCode);
-
-    console.log(`Running unit test ${functionName}Test...`);
-    await testFunction(generatedCodeFolder, functionName);
-
-    // Ask GPT for the function spec
-    console.log("Test passed (or didn't exist). Asking GPT to generate a function spec...")
+    // Ask GPT to generate a function spec for it
+    ui.startSpinner("Asking GPT to generate a function spec, so we can include it in future prompts.")
     messages.push({ role: "user", content: prompts.createFunctionSpecPrompt });
     const specResponse = await callOpenAICompletions(openai, model, messages, null);
 
     const functionSpecString = specResponse.message.content.split('---')[1].trim();
     const trimmedFunctionSpecString = trimBackticks(functionSpecString);
 
-    const functionSpecFilePath = path.join(generatedCodeFolder, `${functionName}.json`);
+    const functionSpecFilePath = path.join(codeFolder, `${functionName}.json`);
     fs.writeFileSync(functionSpecFilePath, trimmedFunctionSpecString);
-
-    console.log(`Done! Function ${functionName} is now implemented and tested and ready to use!`);
+    ui.stopSpinnerWithCheckmark();
 
     return JSON.parse(trimmedFunctionSpecString);
+}
+
+async function verifyThatCodeIsSafe(codeFolder, quarantineFolder, functionName, functionCode) {
+    resetFolder(quarantineFolder);
+    const nextVersion = getNextModuleVersion(codeFolder, functionName);
+    const quarantineFilePath = getModulePath(quarantineFolder, functionName, nextVersion);
+    fs.writeFileSync(quarantineFilePath, functionCode);
+    const userApproval = await ui.askIfCodeFileIsSafe(functionName, quarantineFilePath);
+    if (userApproval.toLowerCase() !== 'y') {
+        throw new Error("Function creation declined by user.");
+    }
+    // reload it in case the user made changes
+    let possiblyUpdatedFunctionCode = fs.readFileSync(quarantineFilePath, 'utf8').toString();
+    fs.unlinkSync(quarantineFilePath);
+    return possiblyUpdatedFunctionCode;
 }
 
 /**
  * Calls GPT and allows it to dynamically generate functions needed to complete the task.
  */
-export async function callGptWithDynamicFunctionCreation(openai, model, outputFolder, gptPrompt) {
-    const generatedCodeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
-    createFolderIfMissing(generatedCodeFolder);
-    const testScratchFolder = path.join(outputFolder, TEST_SCRATCH_FOLDER_NAME);
-    createFolderIfMissing(testScratchFolder);
+export async function callGptWithDynamicFunctionCreation(openai, model, outputFolder, functionSpecs, messages, userPrompt) {
+    const codeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
+    createFolderIfMissing(codeFolder);
+    const quarantineFolder = path.join(outputFolder, QUARANTINE_FOLDER_NAME);
+    createFolderIfMissing(quarantineFolder);
 
-    let messages = [
-        { role: "system", content: prompts.mainSystemMessage},
-        { role: "user", content: gptPrompt }
-    ];
-
-    let functionSpecs = [prompts.requestFunctionSpec];
+    messages.push(
+        { role: "user", content: userPrompt },
+    );
 
     while (true) {
-        console.log("\n\n============================");
-        console.log("Sending: ", getLast(messages));
-        console.log("Including functions: ", functionSpecs);
-
+        ui.startSpinner('Waiting for GPT-4 response. Giving it functions: ' + functionSpecs.map(f => f.name).join(', '));
         const response = await callOpenAICompletions(openai, model, messages, functionSpecs);
+        ui.stopSpinnerWithCheckmark();
         let responseMessage = response.message;
-
-        console.log("Got response: ", responseMessage);
         messages.push(responseMessage);
 
         if (responseMessage.function_call) {
@@ -185,20 +161,19 @@ export async function callGptWithDynamicFunctionCreation(openai, model, outputFo
                 const generatedFunctionSpec = await askGptToGenerateFunction(
                     openai,
                     model,
-                    generatedCodeFolder,
-                    testScratchFolder,
+                    codeFolder,
+                    quarantineFolder,
                     functionArgs.name,
                     functionArgs.description
                 );
                 functionSpecs.push(generatedFunctionSpec);
                 messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." });
             } else {
-                const result = await executeGeneratedFunction(openai, model, generatedCodeFolder, functionName, functionArgs);
+                const result = await executeGeneratedFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs);
                 const resultDescription = result !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
                 messages.push({ role: "function", name: functionName, content: resultDescription });
             }
         } else if (response.finish_reason === 'stop') {
-            console.log("Chat completed! Final message: ", responseMessage.content);
             return responseMessage.content;
         }
     }
@@ -214,29 +189,11 @@ async function callOpenAICompletions(openai, model, messages, functions) {
         body.functions = functions;
     }
 
-    const requestBodyLog = `<h1>Request</h1><br>
-                        <b>Model</b>: ${model} <br>
-                        <b>Messages</b>: <br>
-                        ${messages.map(m => `- ${m.role}: ${m.role === 'user' ? '<pre>'+ m.content + '</pre>' : m.content}`).join('<br>')} <br><br>
-                        <b>Functions</b>: <br> <pre>${functions ? JSON.stringify(functions, null, 2) : 'None'}</pre> <br><hr>`;
-
-    fs.appendFileSync(path.join(process.cwd(), 'gpt.log.html'), requestBodyLog);
+    log.logGptRequest(model, messages, functions);
 
     const response = await openai.chat.completions.create(body);
 
-    let functionDetailsLog = '';
-    if(response.choices[0].finish_reason === 'function_call') {
-        const funcCall = response.choices[0].message.function_call;
-        functionDetailsLog = `<b>Function Call</b>: <br> <b>Name</b>: ${funcCall.name} <br> <b>Arguments</b>: <pre>${JSON.stringify(JSON.parse(funcCall.arguments), null, 2)}</pre><br>`;
-    }
-
-    const responseBodyLog = `<h1>Response</h1> <br>
-                         <b>Message Content</b>: <br><pre>${response.choices[0].message.content}</pre><br>
-                         ${functionDetailsLog}
-                         <b>Finish Reason</b>: ${response.choices[0].finish_reason} <br>
-                         <hr>`;
-
-    fs.appendFileSync(path.join(process.cwd(), 'gpt.log.html'), responseBodyLog);
+    log.logGptResponse(response);
 
     return response.choices[0];
 }
