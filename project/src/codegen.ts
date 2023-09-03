@@ -115,7 +115,6 @@ export async function callFunction(generatedCodeFolder: string, workingDir: stri
     let returnValue: any;
     let thrownError: Error | undefined;
 
-    console.log("....1....")
     const originalWorkingDir = process.cwd();
     try {
 
