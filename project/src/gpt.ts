@@ -1,7 +1,6 @@
 // gpt.mjs
 import {
-    callFunction,
-    getLatestModuleCode,
+    callFunction, getLatestModuleCode,
     getModulePath,
     getNextModuleVersion,
     saveFunctionAndUpdateDependencies
@@ -14,7 +13,7 @@ import ui from "./ui";
 import {Chat} from "openai/resources";
 import {OpenAI} from "openai";
 import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
-import {createFolderIfMissing, resetFolder, trimBackticks} from "./util";
+import {createFolderIfMissing, describeError, resetFolder, trimBackticks} from "./util";
 import ChatCompletion = Chat.ChatCompletion;
 import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
 
@@ -32,21 +31,21 @@ async function executeGeneratedFunction(openai: OpenAI,
     const MAX_ATTEMPTS = 3;
 
     while (attempts < MAX_ATTEMPTS) {
-        try {
-            ui.startSpinner(`Running function ${functionName} with args ${JSON.stringify(functionArgs)}`)
-            const result = await callFunction(codeFolder, functionName, functionArgs);
+        ui.startSpinner(`Running function ${functionName} with args ${JSON.stringify(functionArgs)}`)
+        const result = await callFunction(codeFolder, functionName, functionArgs);
+        if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
-            return result;
-        } catch (error) {
-            ui.stopSpinnerWithCross();
-            log.error(error);
-            attempts++;
-            if (attempts >= MAX_ATTEMPTS) {
-                throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts.`);
-            }
-
-            await askGptToDebugFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs, error);
+            return result.returnValue;
         }
+
+        ui.stopSpinnerWithCross();
+        log.error("The function threw an error: ", result.thrownError);
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+            throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts. Last error was: ${result.thrownError}`);
+        }
+
+        await askGptToDebugFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs, result.consoleOutput, result.thrownError);
     }
 }
 
@@ -56,6 +55,7 @@ async function askGptToDebugFunction(    openai: OpenAI,
                                          quarantineFolder: string,
                                          functionName: string,
                                          functionArgs: any,
+                                         consoleOutput: string[],
                                          error: any): Promise<void> {
     // Retrieve the function code
     const moduleCode = await getLatestModuleCode(codeFolder, functionName);
@@ -70,7 +70,8 @@ async function askGptToDebugFunction(    openai: OpenAI,
         .replace('{functionSpec}', functionSpec)
         .replace('{moduleCode}', moduleCode)
         .replace('{functionInput}', JSON.stringify(functionArgs))
-        .replace('{functionError}', JSON.stringify(error));
+        .replace('{consoleOutput}', consoleOutput.join('\n'))
+        .replace('{functionError}', describeError(error));
 
     // Request GPT to fix the function
     ui.startSpinner("Damn. It failed. Asking GPT to code up a new debugged version of it.");

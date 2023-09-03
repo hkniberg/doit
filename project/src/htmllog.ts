@@ -8,8 +8,8 @@ export function info(message: string): void {
     appendHtml(`<br><pre>${message}</pre>`);
 }
 
-export function error(error: any): void {
-    appendHtml(`<h2>Error</h2><br><pre>${error}</pre><br><hr>`);
+export function error(comment: string, error?: any): void {
+    appendHtml(`<h2>${comment}</h2><br><pre>${error}</pre><br><hr>`);
 }
 
 export function initLogFile(): void {

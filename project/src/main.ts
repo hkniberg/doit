@@ -6,9 +6,11 @@ import path from "path";
 import ui from "./ui";
 import * as log from "./htmllog";
 import * as prompts from "./prompts";
+import {initLogFile} from "./htmllog";
 
 config();
 const OUTPUT_FOLDER: string = path.resolve(process.cwd(), '..', 'output');
+initLogFile();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY as string });
 
@@ -38,7 +40,7 @@ const mainLoop = async (): Promise<void> => {
             ui.stopSpinnerWithCheckmark();
             ui.textBox('magenta', 'cyan', `GPT: ${result}`);
         } catch (error) {
-            log.error(error);
+            log.error("Something went wrong when talking to GPT", error);
             ui.stopSpinnerWithCheckmark();
             ui.textBox('red', 'white', `An error occurred: ${error}`);
         }

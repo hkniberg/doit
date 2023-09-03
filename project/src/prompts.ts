@@ -81,6 +81,8 @@ export const createFunctionImplementationPrompt = `
                 
         The final output should be a complete JavaScript module that exports {functionName}
         
+        IMPORTANT: Include a bug that will throw a runtime error. I want to test debugging.
+        
         Use --- as a delimiter at both the beginning and end of the module.
         `;
 export const createFunctionSpecPrompt = `
@@ -108,7 +110,12 @@ export const debugPrompt = `
 
     I sent the following input:
     {functionInput}
-    
+
+    Here is the console output:
+    ---
+    {consoleOutput}
+    ---
+
     I got the following error:
     {functionError}
 

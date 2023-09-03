@@ -79,7 +79,13 @@ export async function getLatestModuleCode(generatedCodeFolder: string, functionN
     return fs.readFileSync(latestModulePath, 'utf8');
 }
 
-export async function callFunction(generatedCodeFolder: string, functionName: string, functionArgs: any): Promise<any> {
+export interface CallFunctionResult {
+    returnValue?: any;
+    consoleOutput: string[];
+    thrownError?: Error;
+}
+
+export async function callFunction(generatedCodeFolder: string, functionName: string, functionArgs: any): Promise<CallFunctionResult> {
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
     }
@@ -99,8 +105,51 @@ export async function callFunction(generatedCodeFolder: string, functionName: st
 
     const module: any = await import(latestModulePath);
     const importedFunction: any = module[functionName];
-    return importedFunction(functionArgs);
+
+    // Capture console output
+    const originalConsoleLog = console.log;
+    const originalConsoleWarn = console.warn;
+    const originalConsoleError = console.error;
+
+    const consoleOutput: string[] = [];
+
+    console.log = (...args: any[]) => { consoleOutput.push(`[LOG] ${args.join(' ')}`); };
+    console.warn = (...args: any[]) => { consoleOutput.push(`[WARN] ${args.join(' ')}`); };
+    console.error = (...args: any[]) => { consoleOutput.push(`[ERROR] ${args.join(' ')}`); };
+
+    let returnValue: any;
+    let thrownError: Error | undefined;
+
+    try {
+        returnValue = await importedFunction(functionArgs);
+    } catch (error) {
+        if (error instanceof Error) {
+            thrownError = error;
+        } else {
+            thrownError = new Error("Something strange was thrown, it isn't even of type Error: " + error);
+        }
+    }
+
+    // Restore original console methods
+    console.log = originalConsoleLog;
+    console.warn = originalConsoleWarn;
+    console.error = originalConsoleError;
+
+    const result: CallFunctionResult = {
+        consoleOutput
+    };
+
+    if (returnValue !== undefined) {
+        result.returnValue = returnValue;
+    }
+
+    if (thrownError !== undefined) {
+        result.thrownError = thrownError;
+    }
+
+    return result;
 }
+
 
 export function getLatestModuleVersion(generatedCodeFolder: string, functionName: string): number | null {
     let currentVersion: number | null = null;

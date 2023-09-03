@@ -40,3 +40,12 @@ export function getLast<T>(array: T[]): T | undefined {
     return array[array.length - 1];
 }
 
+export function describeError(error: any): string {
+    if (error instanceof Error) {
+        return `Error Name: ${error.name}\nError Message: ${error.message}\nStack Trace: ${error.stack}`;
+    } else {
+        return `Unknown Error: ${JSON.stringify(error)}`;
+    }
+}
+
+
