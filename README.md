@@ -1,8 +1,12 @@
 A proof-of-concept implementation of dynamic GPT function calling.
 This allows GPT to generate the code it needs on-the-fly.
 
-For example if you ask it to download a page, it will dynamially generate the code
-to download a page, and then call it.
+It is essentially a terminal-based ChatGPT clone that can autogenerate code on the fly,
+so you can ask it to access the internet or create files or check the weather or whatever,
+and it will figure it out.
+
+For example if you ask it to download a web page, it will dynamically generate the code
+to access the web and save files. 
 
 WARNING: This can be dangerous. Use carefully, and at own risk!
 
