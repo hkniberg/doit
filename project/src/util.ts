@@ -1,25 +1,26 @@
+// util.ts
 import fs from "fs";
 
-export function createFolderIfMissing(folderPath) {
+export function createFolderIfMissing(folderPath: string): void {
     if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath, { recursive: true });
     }
 }
 
-export function removeFolderIfItExists(folderPath) {
+export function removeFolderIfItExists(folderPath: string): void {
     if (fs.existsSync(folderPath)) {
         fs.rmSync(folderPath, { recursive: true });
     }
 }
 
-export function resetFolder(folderPath) {
+export function resetFolder(folderPath: string): void {
     if (fs.existsSync(folderPath)) {
         fs.rmSync(folderPath, { recursive: true });
     }
     fs.mkdirSync(folderPath, { recursive: true });
 }
 
-export function trimBackticks(content) {
+export function trimBackticks(content: string): string {
     const lines = content.split('\n');
 
     // Remove the first line if it starts with ```
@@ -35,6 +36,7 @@ export function trimBackticks(content) {
     return lines.join('\n');
 }
 
-export function getLast(array) {
+export function getLast<T>(array: T[]): T | undefined {
     return array[array.length - 1];
 }
+

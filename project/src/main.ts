@@ -1,27 +1,21 @@
 // main.mjs
-import {callGptWithDynamicFunctionCreation} from "./gpt.mjs";
-import OpenAI from "openai";
-import {config} from "dotenv-safe";
-import {resetFolder} from "./util.mjs";
+import { callGptWithDynamicFunctionCreation } from "./gpt";
+import { OpenAI } from "openai";
+import { config } from "dotenv-safe";
 import path from "path";
-import ui from "./ui.mjs";
-import {initLogFile} from "./htmllog.mjs";
-import * as log from "./htmllog.mjs";
-import * as prompts from "./prompts.mjs";
+import ui from "./ui";
+import { initLogFile } from "./htmllog";
+import * as log from "./htmllog";
+import * as prompts from "./prompts";
 
 config();
-const OUTPUT_FOLDER = path.resolve(process.cwd(), '..', 'output');
+const OUTPUT_FOLDER: string = path.resolve(process.cwd(), '..', 'output');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY as string });
 
-resetFolder(path.join(OUTPUT_FOLDER, "code"));
-resetFolder(path.join(OUTPUT_FOLDER, "files"));
+const MODEL: string = process.env.MODEL as string;
 
-initLogFile();
-
-const MODEL = process.env.MODEL;
-
-const mainLoop = async () => {
+const mainLoop = async (): Promise<void> => {
     let messages = [
         { role: "system", content: prompts.mainSystemMessage}
     ];

@@ -2,12 +2,13 @@
   "name": "gpt-dynamic-functions",
   "version": "1.0.0",
   "description": "",
-  "main": "main.mjs",
   "scripts": {
-    "start": "node main.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx tsc",
+    "watch": "npx tsc -w",
+    "run": "npx ts-node src/main.ts"
   },
   "keywords": [],
+  "type": "module",
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -22,5 +23,9 @@
     "ora": "^7.0.1",
     "readline-sync": "^1.4.10",
     "terminal-link": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/dotenv-safe": "^8.1.2",
+    "ts-node": "^10.9.1"
   }
 }
