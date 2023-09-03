@@ -78,7 +78,7 @@ class UI {
 
     write(message: string): void {
         log.info(message);
-        console.log(chalk.gray(message));
+        console.log(message);
     }
 }
 

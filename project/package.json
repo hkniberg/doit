@@ -5,7 +5,7 @@
   "scripts": {
     "build": "npx tsc",
     "watch": "npx tsc -w",
-    "run": "npx ts-node src/main.ts"
+    "main": "npx ts-node src/main.ts"
   },
   "keywords": [],
   "type": "module",
