@@ -39,8 +39,8 @@ export const mainSystemMessage = `
         Use the given function requestFunction() function to describe what you need,
         and I will make sure those functions are available to you in the next message.
         
-        Only request a new function if you don't already have a function that can do the job.
-        Only request functions for things that you can't do yourself. 
+        Don't request a new function if that function already exists.
+        Don't request a new function for things you can do yourself.  
         
         Example 1: If I ask you to summarize a web page, don't ask for a function to summarize a web page.
         Instead, ask for a function to access a web page (since you can't do that yourself), and then you
@@ -58,16 +58,16 @@ export const mainSystemMessage = `
 export let codeStyle = `        
         - Use ESM syntax with import/export statements. Avoid using require().
         - {functionName} should accept only one argument, an object with named parameters.
-        - Incorporate logging within the code to provide visibility into its operations.
-        - The function should throw an error if it encounters any issues.
+        - The function should throw an error if it can't complete successfully.
         - Favor async/await over callbacks for asynchronous operations.
         - Treat any file paths as relative to current working dir, not relative to the module. Don't use __dirname.
         - Use packages whenever possible. Avoid writing your own code for common tasks.
+        - Don't include dummy code or placeholder code. The function should be complete and ready for production use.
         - If the function needs user-specific information or environment-specific information,
           for example a password or an API key for a third-party service, 
           then that should be passed in as parameters to the function,
           and the assistant should ask the user about this information before calling the function. 
-          Don't prompt the user from inside the function, and rely on hardcoded values, config files, or environment variables. 
+          Don't prompt the user from inside the function, and don't rely on hardcoded values, config files, or environment variables. 
 `;
 export const createFunctionImplementationPrompt = `
         Write a JavaScript function named {functionName}
@@ -80,8 +80,6 @@ export const createFunctionImplementationPrompt = `
         {codeStyle}        
                 
         The final output should be a complete JavaScript module that exports {functionName}
-        
-        IMPORTANT: Include a bug that will throw a runtime error. I want to test debugging.
         
         Use --- as a delimiter at both the beginning and end of the module.
         `;
@@ -109,7 +107,9 @@ export const debugPrompt = `
     ---
 
     I sent the following input:
+    ---
     {functionInput}
+    ---
 
     Here is the console output:
     ---
@@ -117,12 +117,14 @@ export const debugPrompt = `
     ---
 
     I got the following error:
+    ---
     {functionError}
+    ---
 
     Please provide a complete new version of this module, where the bug is fixed.
     Make sure the implementation obeys the function spec.
     
-    Follow this code rules: 
+    Follow these code rules: 
     {codeStyle} 
     
     If you are unable to determine the cause of the bug, just return the same module

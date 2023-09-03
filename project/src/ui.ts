@@ -1,6 +1,6 @@
-import chalk, {ChalkInstance} from "chalk";
-import readline, { Interface } from "readline";
-import ora, { Ora } from "ora";
+import chalk from "chalk";
+import readline, {Interface} from "readline";
+import ora, {Ora} from "ora";
 import * as log from "./htmllog";
 import terminalLink from "terminal-link";
 import boxen from "boxen";
@@ -25,7 +25,7 @@ class UI {
     async ask(question: string): Promise<string> {
         log.info(`Asking user: ${question}`);
         const answer: string = await new Promise((resolve) => {
-            this.rl.question(chalk.green(question), (answer) => {
+            this.rl.question(question, (answer) => {
                 resolve(answer);
             });
         });
@@ -35,13 +35,13 @@ class UI {
 
     async askIfCodeFileIsSafe(functionName: string, quarantineFilePath: string): Promise<string> {
         const link = terminalLink(functionName, 'file:///' + quarantineFilePath);
-        return await this.ask("Is this code safe to run? " + link + " (y/n)");
+        let question = chalk.red(`Do you trust this GPT-generated code?\n${link}\n(y/n)`);
+        return await this.ask(question);
     }
 
-    textBox(borderColor: string, textColor: keyof typeof chalk, text: string): void {
+    textBox(borderColor: string, text: string): void {
         log.info(text);
-        let chalkInstance = chalk[textColor] as ChalkInstance;
-        console.log(boxen(chalkInstance(`${text}`), { padding: 1, borderColor: borderColor, borderStyle: 'round' }));
+        console.log(boxen(text, { padding: 1, borderColor: borderColor, borderStyle: 'round' }));
     }
 
     removePreviousLine(): void {

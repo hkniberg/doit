@@ -106,26 +106,26 @@ export async function callFunction(generatedCodeFolder: string, workingDir: stri
 
     const latestModulePath: string = getModulePath(generatedCodeFolder, functionName, latestVersion);
 
-    const module: any = await import(latestModulePath);
-    const importedFunction: any = module[functionName];
-
-    // Capture console output
     const originalConsoleLog = console.log;
     const originalConsoleWarn = console.warn;
     const originalConsoleError = console.error;
 
     const consoleOutput: string[] = [];
 
-    console.log = (...args: any[]) => { consoleOutput.push(`[LOG] ${args.join(' ')}`); };
-    console.warn = (...args: any[]) => { consoleOutput.push(`[WARN] ${args.join(' ')}`); };
-    console.error = (...args: any[]) => { consoleOutput.push(`[ERROR] ${args.join(' ')}`); };
-
     let returnValue: any;
     let thrownError: Error | undefined;
 
+    console.log("....1....")
     const originalWorkingDir = process.cwd();
     try {
+
         process.chdir(workingDir);
+        console.log = (...args: any[]) => { consoleOutput.push(`[LOG] ${args.join(' ')}`); };
+        console.warn = (...args: any[]) => { consoleOutput.push(`[WARN] ${args.join(' ')}`); };
+        console.error = (...args: any[]) => { consoleOutput.push(`[ERROR] ${args.join(' ')}`); };
+
+        const module: any = await import(latestModulePath);
+        const importedFunction: any = module[functionName];
         returnValue = await importedFunction(functionArgs);
     } catch (error) {
         if (error instanceof Error) {
@@ -135,12 +135,10 @@ export async function callFunction(generatedCodeFolder: string, workingDir: stri
         }
     } finally {
         process.chdir(originalWorkingDir);
+        console.log = originalConsoleLog;
+        console.warn = originalConsoleWarn;
+        console.error = originalConsoleError;
     }
-
-    // Restore original console methods
-    console.log = originalConsoleLog;
-    console.warn = originalConsoleWarn;
-    console.error = originalConsoleError;
 
     const result: CallFunctionResult = {
         consoleOutput

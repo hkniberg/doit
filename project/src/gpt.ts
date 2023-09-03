@@ -16,6 +16,8 @@ import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
 import {createFolderIfMissing, describeError, resetFolder, trimBackticks} from "./util";
 import ChatCompletion = Chat.ChatCompletion;
 import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
+import chalk from "chalk";
+import * as colors from "./colors";
 
 // All these will be relative to the output folder
 const CODE_FOLDER_NAME='code';
@@ -49,7 +51,7 @@ async function executeGeneratedFunction(openai: OpenAI,
     const MAX_ATTEMPTS = 3;
 
     while (attempts < MAX_ATTEMPTS) {
-        ui.startSpinner(`Running function ${functionName} with args ${JSON.stringify(functionArgs)}`)
+        ui.startSpinner(`Running function ${colors.functionName(functionName)} with args ${JSON.stringify(functionArgs)}`)
         const result = await callFunction(codeFolder, workingDir, functionName, functionArgs);
         if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
@@ -92,8 +94,8 @@ async function askGptToDebugFunction(    openai: OpenAI,
         .replace('{functionError}', describeError(error));
 
     // Request GPT to fix the function
-    ui.startSpinner("Damn. It failed. Asking GPT to code up a new debugged version of it.");
-    const response = await callOpenAICompletions(openai, model, [
+    ui.startSpinner("Damn. It failed. " + chalk.red(describeError(error, false)) + ". Asking GPT to code up a new debugged version of it.");
+    const response = await callOpenAICompletions(openai, model, 0,  [
         { role: "system", content: prompts.debugSystemPrompt },
         { role: "user", content: userMessage }
     ]);
@@ -131,9 +133,9 @@ async function askGptToGenerateFunction(    openai: OpenAI,
 
     messages.push({ role: "user", content: implementationPrompt });
 
-    ui.startSpinner("GPT requested a function called " + functionName + ". Asking GPT to code it up.");
+    ui.startSpinner(`GPT requested a new function called ${colors.functionName(functionName)}. Asking GPT to code it up.`);
 
-    const implementationResponse = await callOpenAICompletions(openai, model, messages);
+    const implementationResponse = await callOpenAICompletions(openai, model, 0, messages);
     if (!implementationResponse.message.content) {
         throw new Error("GPT failed to generate a function, no content in response.");
     }
@@ -152,7 +154,7 @@ async function askGptToGenerateFunction(    openai: OpenAI,
     // Ask GPT to generate a function spec for it
     ui.startSpinner("Asking GPT to generate a function spec, so we can include it in future prompts.")
     messages.push({ role: "user", content: prompts.createFunctionSpecPrompt });
-    const specResponse = await callOpenAICompletions(openai, model, messages);
+    const specResponse = await callOpenAICompletions(openai, model, 0, messages);
 
     if (!specResponse.message.content) {
         throw new Error("GPT failed to generate a function spec, no content in response.");
@@ -190,6 +192,7 @@ async function verifyThatCodeIsSafe(    codeFolder: string,
  */
 export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
                                                              model: string,
+                                                             temperature: number,
                                                              outputFolder: string,
                                                              functionSpecs: ChatCompletionCreateParams.Function[],
                                                              messages: any[],
@@ -206,8 +209,9 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
     );
 
     while (true) {
-        ui.startSpinner('Waiting for GPT-4 response. Giving it functions: ' + functionSpecs.map(f => f.name).join(', '));
-        const response = await callOpenAICompletions(openai, model, messages, functionSpecs);
+        let functionNames = functionSpecs.map(f => colors.functionName(f.name));
+        ui.startSpinner(`Waiting for GPT-4 response. Giving it functions: ${functionNames.join(', ')}`);
+        const response = await callOpenAICompletions(openai, model, temperature, messages, functionSpecs);
         ui.stopSpinnerWithCheckmark();
         let responseMessage = response.message;
         messages.push(responseMessage);
@@ -241,11 +245,13 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
 // Helper function to call OpenAI API and get the first choice message
 async function callOpenAICompletions(    openai: OpenAI,
                                          model: string,
+                                         temperature: number,
                                          messages: ChatCompletionMessage[],
                                          functions?:  ChatCompletionCreateParams.Function[]): Promise<ChatCompletion.Choice> {
     let body: ChatCompletionCreateParamsNonStreaming = {
         model: model,
-        messages: messages
+        messages: messages,
+        temperature: temperature,
     };
     if (functions) {
         body.functions = functions;

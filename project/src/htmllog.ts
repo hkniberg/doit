@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
+import {describeError} from "./util";
 
 const FILE_NAME: string = 'log.html';
 
@@ -9,7 +10,7 @@ export function info(message: string): void {
 }
 
 export function error(comment: string, error?: any): void {
-    appendHtml(`<h2>${comment}</h2><br><pre>${error}</pre><br><hr>`);
+    appendHtml(`<p>${comment}</p><br><pre>${describeError(error)}</pre><br><hr>`);
 }
 
 export function initLogFile(): void {
