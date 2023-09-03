@@ -23,9 +23,6 @@ export async function saveFunctionAndUpdateDependencies(generatedCodeFolder: str
     if (!functionCode) {
         throw new Error("functionCode is required");
     }
-    if (typeof functionCode !== "string") {
-        throw new Error("functionCode must be a string");
-    }
 
     const nextVersion: number = getNextModuleVersion(generatedCodeFolder, functionName);
     const filePath: string = getModulePath(generatedCodeFolder, functionName, nextVersion);

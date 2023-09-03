@@ -1,10 +1,9 @@
 // main.mjs
-import { callGptWithDynamicFunctionCreation } from "./gpt";
-import { OpenAI } from "openai";
-import { config } from "dotenv-safe";
+import {callGptWithDynamicFunctionCreation} from "./gpt";
+import {OpenAI} from "openai";
+import {config} from "dotenv-safe";
 import path from "path";
 import ui from "./ui";
-import { initLogFile } from "./htmllog";
 import * as log from "./htmllog";
 import * as prompts from "./prompts";
 

@@ -13,16 +13,10 @@ import * as log from "./htmllog";
 import ui from "./ui";
 import {Chat} from "openai/resources";
 import {OpenAI} from "openai";
-
-import {
-    ChatCompletionMessage,
-    CompletionCreateParams,
-    CompletionCreateParamsNonStreaming
-} from "openai/src/resources/chat/completions";
+import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
 import {createFolderIfMissing, resetFolder, trimBackticks} from "./util";
 import ChatCompletion = Chat.ChatCompletion;
-import {ChatCompletionCreateParams} from "openai/resources/chat";
-
+import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
 
 // All these will be relative to the output folder
 const CODE_FOLDER_NAME='code';
@@ -228,7 +222,7 @@ async function callOpenAICompletions(    openai: OpenAI,
                                          model: string,
                                          messages: ChatCompletionMessage[],
                                          functions?:  ChatCompletionCreateParams.Function[]): Promise<ChatCompletion.Choice> {
-    let body: CompletionCreateParamsNonStreaming = {
+    let body: ChatCompletionCreateParamsNonStreaming = {
         model: model,
         messages: messages
     };
