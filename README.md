@@ -1,9 +1,11 @@
-A proof-of-concept implementation of dynamic GPT function calling.
-This allows GPT to generate the code it needs on-the-fly.
+# What happens if you give GPT a 'createFunction' function?
 
-It is essentially a terminal-based ChatGPT clone that can autogenerate code on the fly,
-so you can ask it to access the internet or create files or check the weather or whatever,
-and it will figure it out.
+This is a proof-of-concept implementation of dynamic GPT function calling.
+It allows GPT to generate the code it needs on-the-fly.
+
+This runs as a terminal-based ChatGPT clone that can autogenerate code on the fly.
+So you can ask it to access the internet or create files or check the weather or whatever,
+and it will figure it out on its own.
 
 For example if you ask it to download a web page, it will dynamically generate the code
 to access the web and save files. 
