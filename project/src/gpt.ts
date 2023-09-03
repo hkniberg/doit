@@ -21,6 +21,22 @@ import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from
 const CODE_FOLDER_NAME='code';
 const QUARANTINE_FOLDER_NAME='quarantine';
 
+export async function loadFunctionSpecs(outputFolder: string): Promise<ChatCompletionCreateParams.Function[]> {
+    const codeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
+    if (!fs.existsSync(codeFolder)) {
+        return [];
+    }
+    // All function specs are stored as xxx.json files in the code folder.
+    // Load them all and return them.
+    const files = fs.readdirSync(codeFolder);
+    return files
+        .filter(file => file.endsWith('.json') && (file !== 'package.json') && (file !== 'package-lock.json'))
+        .map(file => {
+            const functionSpec = fs.readFileSync(path.join(codeFolder, file), 'utf-8');
+            return JSON.parse(functionSpec);
+        });
+}
+
 async function executeGeneratedFunction(openai: OpenAI,
                                         model: string,
                                         codeFolder: string,

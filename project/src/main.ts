@@ -1,5 +1,5 @@
 // main.mjs
-import {callGptWithDynamicFunctionCreation} from "./gpt";
+import {callGptWithDynamicFunctionCreation, loadFunctionSpecs} from "./gpt";
 import {OpenAI} from "openai";
 import {config} from "dotenv-safe";
 import path from "path";
@@ -7,6 +7,8 @@ import ui from "./ui";
 import * as log from "./htmllog";
 import * as prompts from "./prompts";
 import {initLogFile} from "./htmllog";
+import {ChatCompletionCreateParams} from "openai/resources/chat";
+import chalk from "chalk";
 
 config();
 const OUTPUT_FOLDER: string = path.resolve(process.cwd(), '..', 'output');
@@ -20,7 +22,12 @@ const mainLoop = async (): Promise<void> => {
     let messages = [
         { role: "system", content: prompts.mainSystemMessage}
     ];
-    let functionSpecs = [prompts.requestFunctionSpec];
+    const savedFunctionSpecs = await loadFunctionSpecs(OUTPUT_FOLDER);
+    const functionSpecNames = savedFunctionSpecs.map(spec => chalk.red(spec.name));
+    if (functionSpecNames.length > 0) {
+        console.log(chalk.dim("Found some previously generated functions:", functionSpecNames.join(", ")));
+    }
+    const functionSpecs: ChatCompletionCreateParams.Function[] = [prompts.requestFunctionSpec, ...savedFunctionSpecs];
 
     while (true) {
         const question = await ui.ask("What would you like to ask GPT-4? (Type 'exit' to quit) ");
