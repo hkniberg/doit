@@ -19,6 +19,7 @@ import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from
 
 // All these will be relative to the output folder
 const CODE_FOLDER_NAME='code';
+const FILES_FOLDER_NAME='files';
 const QUARANTINE_FOLDER_NAME='quarantine';
 
 export async function loadFunctionSpecs(outputFolder: string): Promise<ChatCompletionCreateParams.Function[]> {
@@ -41,6 +42,7 @@ async function executeGeneratedFunction(openai: OpenAI,
                                         model: string,
                                         codeFolder: string,
                                         quarantineFolder: string,
+                                        workingDir: string,
                                         functionName: string,
                                         functionArgs: any): Promise<any> {
     let attempts = 0;
@@ -48,7 +50,7 @@ async function executeGeneratedFunction(openai: OpenAI,
 
     while (attempts < MAX_ATTEMPTS) {
         ui.startSpinner(`Running function ${functionName} with args ${JSON.stringify(functionArgs)}`)
-        const result = await callFunction(codeFolder, functionName, functionArgs);
+        const result = await callFunction(codeFolder, workingDir, functionName, functionArgs);
         if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
             return result.returnValue;
@@ -196,6 +198,8 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
     createFolderIfMissing(codeFolder);
     const quarantineFolder = path.join(outputFolder, QUARANTINE_FOLDER_NAME);
     createFolderIfMissing(quarantineFolder);
+    const workingDirWhenRunningFunctions = path.join(outputFolder, FILES_FOLDER_NAME);
+    createFolderIfMissing(workingDirWhenRunningFunctions);
 
     messages.push(
         { role: "user", content: userPrompt },
@@ -224,7 +228,7 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
                 functionSpecs.push(generatedFunctionSpec);
                 messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." });
             } else {
-                const result = await executeGeneratedFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs);
+                const result = await executeGeneratedFunction(openai, model, codeFolder, quarantineFolder, workingDirWhenRunningFunctions, functionName, functionArgs);
                 const resultDescription = result !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
                 messages.push({ role: "function", name: functionName, content: resultDescription });
             }

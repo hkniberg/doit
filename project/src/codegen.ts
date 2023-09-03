@@ -85,9 +85,12 @@ export interface CallFunctionResult {
     thrownError?: Error;
 }
 
-export async function callFunction(generatedCodeFolder: string, functionName: string, functionArgs: any): Promise<CallFunctionResult> {
+export async function callFunction(generatedCodeFolder: string, workingDir: string, functionName: string, functionArgs: any): Promise<CallFunctionResult> {
     if (!generatedCodeFolder) {
         throw new Error("generatedCodeFolder is required");
+    }
+    if (!workingDir) {
+        throw new Error("workingDir is required");
     }
     if (!functionName) {
         throw new Error("functionName is required");
@@ -120,7 +123,9 @@ export async function callFunction(generatedCodeFolder: string, functionName: st
     let returnValue: any;
     let thrownError: Error | undefined;
 
+    const originalWorkingDir = process.cwd();
     try {
+        process.chdir(workingDir);
         returnValue = await importedFunction(functionArgs);
     } catch (error) {
         if (error instanceof Error) {
@@ -128,6 +133,8 @@ export async function callFunction(generatedCodeFolder: string, functionName: st
         } else {
             thrownError = new Error("Something strange was thrown, it isn't even of type Error: " + error);
         }
+    } finally {
+        process.chdir(originalWorkingDir);
     }
 
     // Restore original console methods
