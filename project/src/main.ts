@@ -49,7 +49,6 @@ const mainLoop = async (): Promise<void> => {
 
         try {
             const result = await callGptWithDynamicFunctionCreation(openai, MODEL, TEMPERATURE, OUTPUT_FOLDER, functionSpecs, messages, question);
-            ui.stopSpinnerWithCheckmark();
             ui.textBox('magenta', chalk.cyan(`GPT: ${result}`));
         } catch (error) {
             log.error("Something went wrong when talking to GPT", error);

@@ -50,22 +50,24 @@ class UI {
     }
 
     startSpinner(text: string): void {
-        log.info(text);
+        log.info("START SPINNER: " + text);
         this.spinner = ora(text).start();
     }
 
     stopSpinnerWithCheckmark(): void {
-        log.info("Succeeded!");
+        log.info("STOP SPINNER: Succeeded!");
         if (this.spinner) {
             this.spinner.succeed();
+            this.spinner = null;
             process.stdin.resume();
         }
     }
 
     stopSpinnerWithCross(): void {
-        log.info("Failed!");
+        log.info("STOP SPINNER: Failed!");
         if (this.spinner) {
             this.spinner.fail();
+            this.spinner = null;
             process.stdin.resume();
         }
     }

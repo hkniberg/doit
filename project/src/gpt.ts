@@ -1,6 +1,7 @@
 // gpt.mjs
 import {
-    callFunction, getLatestModuleCode,
+    callFunction,
+    getLatestModuleCode,
     getModulePath,
     getNextModuleVersion,
     saveFunctionAndUpdateDependencies
@@ -14,10 +15,10 @@ import {Chat} from "openai/resources";
 import {OpenAI} from "openai";
 import {ChatCompletionMessageParam} from "openai/src/resources/chat/completions";
 import {createFolderIfMissing, describeError, resetFolder, trimBackticks} from "./util";
-import ChatCompletion = Chat.ChatCompletion;
 import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
 import chalk from "chalk";
 import * as colors from "./colors";
+import ChatCompletion = Chat.ChatCompletion;
 
 // All these will be relative to the output folder
 const CODE_FOLDER_NAME='code';
@@ -52,7 +53,7 @@ async function executeGeneratedFunction(openai: OpenAI,
     const MAX_ATTEMPTS = 3;
 
     while (attempts < MAX_ATTEMPTS) {
-        ui.startSpinner(`Running function ${colors.functionName(functionName)} with args ${JSON.stringify(functionArgs)}`)
+        ui.startSpinner(`Running function ${colors.functionName(functionName)} with args ${colors.functionArgs(JSON.stringify(functionArgs))}`)
         const result = await callFunction(codeFolder, workingDir, functionName, functionArgs);
         if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
@@ -137,7 +138,7 @@ async function askGptToDebugFunction(    openai: OpenAI,
     messages.push({ role: "user", content: debugMessage })
 
     // Request GPT to fix the function
-    ui.startSpinner("Damn. It failed. " + chalk.red(describeError(error, false)) + ". Asking GPT to code up a new debugged version of it.");
+    ui.startSpinner("Damn. It failed. " + chalk.red(describeError(error, false)) + ". Asking GPT to solve the problem.");
     const response = await callOpenAICompletions(openai, model, 0,  messages);
     let responseContent = response.message;
     if (!responseContent.content) {
@@ -232,6 +233,12 @@ async function verifyThatCodeIsSafe(    codeFolder: string,
     return possiblyUpdatedFunctionCode;
 }
 
+function getFunctionNamesString(functionSpecs: ChatCompletionCreateParams.Function[]) {
+    let functionNames = functionSpecs.map(f => colors.functionName(f.name));
+    let functionNamesString = functionNames.join(', ');
+    return functionNamesString;
+}
+
 /**
  * Calls GPT and allows it to dynamically generate functions needed to complete the task.
  */
@@ -253,9 +260,8 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
         { role: "user", content: userPrompt },
     );
 
+    ui.startSpinner(`Waiting for GPT-4 response. Giving it functions: ${getFunctionNamesString(functionSpecs)}`);
     while (true) {
-        let functionNames = functionSpecs.map(f => colors.functionName(f.name));
-        ui.startSpinner(`Waiting for GPT-4 response. Giving it functions: ${functionNames.join(', ')}`);
         const response = await callOpenAICompletions(openai, model, temperature, messages, functionSpecs);
         ui.stopSpinnerWithCheckmark();
         let responseMessage = response.message;
@@ -275,15 +281,19 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
                     functionArgs.description
                 );
                 functionSpecs.push(generatedFunctionSpec);
-                messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." });
+                messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." })
+                ui.startSpinner(`Telling GPT that the function ${colors.functionName(functionArgs.name)} is now available.`);
             } else {
                 const result = await executeGeneratedFunction(openai, model, messages, codeFolder, quarantineFolder, workingDirWhenRunningFunctions, functionName, functionArgs);
                 if (result) {
                     return result;
                 }
+                ui.startSpinner(`Giving GPT the result of ${colors.functionName(functionName)}`);
             }
         } else if (response.finish_reason === 'stop') {
             return responseMessage.content;
+        } else {
+            log.info("Strange, this response is neither a function call nor a stop: " + JSON.stringify(response));
         }
     }
 }
