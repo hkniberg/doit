@@ -10,6 +10,7 @@ import {initLogFile} from "./htmllog";
 import {ChatCompletionCreateParams} from "openai/resources/chat";
 import chalk from "chalk";
 import {describeError, removeFolderIfItExists} from "./util";
+import {ChatCompletionMessageParam} from "openai/src/resources/chat/completions";
 
 config();
 const OUTPUT_FOLDER: string = path.resolve(process.cwd(), '..', 'output');
@@ -23,7 +24,7 @@ const TEMPERATURE = 0.5;
 removeFolderIfItExists(path.join(OUTPUT_FOLDER, "files"));
 
 const mainLoop = async (): Promise<void> => {
-    let messages = [
+    let messages: ChatCompletionMessageParam[] = [
         { role: "system", content: prompts.mainSystemMessage}
     ];
     const savedFunctionSpecs = await loadFunctionSpecs(OUTPUT_FOLDER);

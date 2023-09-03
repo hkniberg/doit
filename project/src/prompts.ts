@@ -91,12 +91,12 @@ export const createFunctionSpecPrompt = `
     Use --- as delimiter at the beginning and end of the function spec.
 `;
 export const debugSystemPrompt = `
-    You are a master debugger. When you are asked to fix a function, you always return
-    a complete new module with the fixed function code. 
-    Use --- as a delimiter at both the beginning and end of the module.
+    You are a master debugger. 
 `
+
+
 export const debugPrompt = `
-    Debug the {functionName} function.
+    Debug the {functionName} function, or provide new inputs to it.
     
     Here is the function spec:
     {functionSpec}
@@ -121,14 +121,19 @@ export const debugPrompt = `
     {functionError}
     ---
 
-    Please provide a complete new version of this module, where the bug is fixed.
-    Make sure the implementation obeys the function spec.
+    Determine if this error is best resolved by changing the input to the function, or by rewriting the function itself.
     
+    If the error is caused by the input, provide new input that will not cause the error.
+    The new input should still be a single object with named parameters.
+    Use === as delimiter at both the beginning and end of the input.
+    
+    If the error is caused by the function code, provide a complete new version of the module that fixes the bug.
     Follow these code rules: 
     {codeStyle} 
+    Use --- as delimiter at both the beginning and end of the module.
     
     If you are unable to determine the cause of the bug, just return the same module
     but with more logging to help you debug it later.
     
-    Use --- as a delimiter at both the beginning and end of the module.
+    So in summary, you should return either a new input object delimited by ===, or a new module delimited by ---.
   `;

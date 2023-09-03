@@ -12,7 +12,7 @@ import * as log from "./htmllog";
 import ui from "./ui";
 import {Chat} from "openai/resources";
 import {OpenAI} from "openai";
-import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
+import {ChatCompletionMessageParam} from "openai/src/resources/chat/completions";
 import {createFolderIfMissing, describeError, resetFolder, trimBackticks} from "./util";
 import ChatCompletion = Chat.ChatCompletion;
 import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
@@ -42,11 +42,12 @@ export async function loadFunctionSpecs(outputFolder: string): Promise<ChatCompl
 
 async function executeGeneratedFunction(openai: OpenAI,
                                         model: string,
+                                        messages: ChatCompletionMessageParam[],
                                         codeFolder: string,
                                         quarantineFolder: string,
                                         workingDir: string,
                                         functionName: string,
-                                        functionArgs: any): Promise<any> {
+                                        functionArgs: any): Promise<string | null> {
     let attempts = 0;
     const MAX_ATTEMPTS = 3;
 
@@ -55,28 +56,68 @@ async function executeGeneratedFunction(openai: OpenAI,
         const result = await callFunction(codeFolder, workingDir, functionName, functionArgs);
         if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
-            return result.returnValue;
+            const resultDescription = result.returnValue !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
+            messages.push({ role: "function", name: functionName, content: resultDescription });
+            return null;
         }
 
+        messages.push({ role: "function", name: functionName, content: "An error was thrown: " + describeError(result.thrownError, false) });
         ui.stopSpinnerWithCross();
         log.error("The function threw an error: ", result.thrownError);
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
-            throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts. Last error was: ${result.thrownError}`);
+            throw new Error(`Failed to fix function ${functionName} after ${MAX_ATTEMPTS} attempts. Last error was: ${describeError(result.thrownError, false)}`);
         }
 
-        await askGptToDebugFunction(openai, model, codeFolder, quarantineFolder, functionName, functionArgs, result.consoleOutput, result.thrownError);
+        const debugResponse = await askGptToDebugFunction(openai, model, messages, codeFolder, quarantineFolder, functionName, functionArgs, result.consoleOutput, result.thrownError);
+        if (!debugResponse.newModuleCode && !debugResponse.newInputParams) {
+            return debugResponse.content;
+        }
+        if (debugResponse.newInputParams) {
+            functionArgs = debugResponse.newInputParams;
+        }
     }
+    return null;
+}
+
+type DebugResponse = {
+    newInputParams?: any;
+    newModuleCode?: string;
+    content: string;
+};
+export function parseGptDebugResponse(response: string): DebugResponse {
+    const result: DebugResponse = {
+        content: response
+    };
+
+    // Check for new input params
+    const inputMatch = response.match(/===(.*?)===/s);
+    if (inputMatch && inputMatch[1]) {
+        try {
+            result.newInputParams = JSON.parse(inputMatch[1].trim());
+        } catch (e) {
+            console.error("Failed to parse new input params:", e);
+        }
+    }
+
+    // Check for new module code
+    const moduleMatch = response.match(/---(.*?)---/s);
+    if (moduleMatch && moduleMatch[1]) {
+        result.newModuleCode = trimBackticks(moduleMatch[1].trim());
+    }
+
+    return result;
 }
 
 async function askGptToDebugFunction(    openai: OpenAI,
                                          model: string,
+                                         messages: ChatCompletionMessageParam[],
                                          codeFolder: string,
                                          quarantineFolder: string,
                                          functionName: string,
                                          functionArgs: any,
                                          consoleOutput: string[],
-                                         error: any): Promise<void> {
+                                         error: any): Promise<DebugResponse> {
     // Retrieve the function code
     const moduleCode = await getLatestModuleCode(codeFolder, functionName);
 
@@ -84,7 +125,7 @@ async function askGptToDebugFunction(    openai: OpenAI,
     const functionSpec = fs.readFileSync(path.join(codeFolder, `${functionName}.json`), 'utf-8');
 
     // Create a debug prompt for GPT to fix the function
-    const userMessage = prompts.debugPrompt
+    const debugMessage = prompts.debugPrompt
         .replace('{codeStyle}', prompts.codeStyle)
         .replaceAll('{functionName}', functionName)
         .replace('{functionSpec}', functionSpec)
@@ -93,27 +134,31 @@ async function askGptToDebugFunction(    openai: OpenAI,
         .replace('{consoleOutput}', consoleOutput.join('\n'))
         .replace('{functionError}', describeError(error));
 
+    messages.push({ role: "user", content: debugMessage })
+
     // Request GPT to fix the function
     ui.startSpinner("Damn. It failed. " + chalk.red(describeError(error, false)) + ". Asking GPT to code up a new debugged version of it.");
-    const response = await callOpenAICompletions(openai, model, 0,  [
-        { role: "system", content: prompts.debugSystemPrompt },
-        { role: "user", content: userMessage }
-    ]);
+    const response = await callOpenAICompletions(openai, model, 0,  messages);
     let responseContent = response.message;
     if (!responseContent.content) {
+        ui.stopSpinnerWithCross();
         throw new Error("GPT failed to generate a function, no content in response.");
     }
 
-    const fixedModuleCode = responseContent.content.split('---')[1].trim();
-    const trimmedFixedModuleCode = trimBackticks(fixedModuleCode);
+    const debugResponse: DebugResponse = parseGptDebugResponse(responseContent.content);
     ui.stopSpinnerWithCheckmark();
 
-    const possiblyUpdatedModuleCode = await verifyThatCodeIsSafe(codeFolder, quarantineFolder, functionName, trimmedFixedModuleCode);
+    if (debugResponse.newModuleCode) {
+        const possiblyUpdatedModuleCode = await verifyThatCodeIsSafe(codeFolder, quarantineFolder, functionName, debugResponse.newModuleCode);
 
-    // Replace the existing function code with the fixed code
-    ui.startSpinner("Installing the debugged function");
-    await saveFunctionAndUpdateDependencies(codeFolder, functionName, possiblyUpdatedModuleCode);
-    ui.stopSpinnerWithCheckmark();
+        // Replace the existing function code with the fixed code
+        ui.startSpinner("Got a new version of the code. Installing it.");
+        await saveFunctionAndUpdateDependencies(codeFolder, functionName, possiblyUpdatedModuleCode);
+        ui.stopSpinnerWithCheckmark();
+    } else if (debugResponse.newInputParams) {
+        ui.write("Got new input params. Let's try again and see if that works better.");
+    }
+    return debugResponse;
 }
 
 async function askGptToGenerateFunction(    openai: OpenAI,
@@ -122,7 +167,7 @@ async function askGptToGenerateFunction(    openai: OpenAI,
                                             quarantineFolder: string,
                                             functionName: string,
                                             functionDescription: string): Promise<ChatCompletionCreateParams.Function> {
-    let messages: ChatCompletionMessage[] = [
+    let messages: ChatCompletionMessageParam[] = [
         { role: "system", content: "You are an awesome javascript coding genius" },
     ];
 
@@ -195,7 +240,7 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
                                                              temperature: number,
                                                              outputFolder: string,
                                                              functionSpecs: ChatCompletionCreateParams.Function[],
-                                                             messages: any[],
+                                                             messages: ChatCompletionMessageParam[],
                                                              userPrompt: string): Promise<string | null> {
     const codeFolder = path.join(outputFolder, CODE_FOLDER_NAME);
     createFolderIfMissing(codeFolder);
@@ -232,9 +277,10 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
                 functionSpecs.push(generatedFunctionSpec);
                 messages.push({ role: "function", name: 'requestFunction', content: "Function created successfully." });
             } else {
-                const result = await executeGeneratedFunction(openai, model, codeFolder, quarantineFolder, workingDirWhenRunningFunctions, functionName, functionArgs);
-                const resultDescription = result !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
-                messages.push({ role: "function", name: functionName, content: resultDescription });
+                const result = await executeGeneratedFunction(openai, model, messages, codeFolder, quarantineFolder, workingDirWhenRunningFunctions, functionName, functionArgs);
+                if (result) {
+                    return result;
+                }
             }
         } else if (response.finish_reason === 'stop') {
             return responseMessage.content;
@@ -246,7 +292,7 @@ export async function callGptWithDynamicFunctionCreation(    openai: OpenAI,
 async function callOpenAICompletions(    openai: OpenAI,
                                          model: string,
                                          temperature: number,
-                                         messages: ChatCompletionMessage[],
+                                         messages: ChatCompletionMessageParam[],
                                          functions?:  ChatCompletionCreateParams.Function[]): Promise<ChatCompletion.Choice> {
     let body: ChatCompletionCreateParamsNonStreaming = {
         model: model,
