@@ -53,4 +53,11 @@ export function describeError(error: any, includeStack: boolean = true): string 
     }
 }
 
+export function truncateIfNecessary(text: string, maxLength: number): string {
+    if (text.length > maxLength) {
+        return text.substring(0, maxLength) + "\n... (the rest was truncated) ...";
+    } else {
+        return text;
+    }
+}
 

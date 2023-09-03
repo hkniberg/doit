@@ -6,5 +6,6 @@ output
 test-scratch
 temp
 project/log.html
-project/temp.mjs
+project/temp.ts
 project/build
+project/src/temp.ts

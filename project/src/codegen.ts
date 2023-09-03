@@ -57,7 +57,7 @@ export async function saveFunctionAndUpdateDependencies(generatedCodeFolder: str
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
     // Run npm install in that folder
-    execSync('npm install', { cwd: generatedCodeFolder, stdio: 'inherit' });
+    execSync('npm install', { cwd: generatedCodeFolder});
 
     return filePath;
 }
@@ -124,7 +124,7 @@ export async function callFunction(generatedCodeFolder: string, workingDir: stri
         console.error = (...args: any[]) => { consoleOutput.push(`[ERROR] ${args.join(' ')}`); };
 
         const module: any = await import(latestModulePath);
-        const importedFunction: any = module[functionName];
+        const importedFunction: any = module[functionName] || module.default;
         returnValue = await importedFunction(functionArgs);
     } catch (error) {
         if (error instanceof Error) {

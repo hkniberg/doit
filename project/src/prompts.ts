@@ -1,3 +1,5 @@
+export const MAX_FUNCTION_RESPONSE_LENGTH = 2000;
+
 const sampleFunctionSpec = {
     "name": "getWeather",
     "description": "Get the current weather for a city",
@@ -49,6 +51,9 @@ export const mainSystemMessage = `
         Example 2: If I ask you about current events in the world that have happened after your cutoff, you
         can request a function to search the web, and then you can summarize and interpret the results yourself.
         
+        Don't combine functions into one function. For example, if you need to read a web page and save it to file,
+        make that two separate functions rather than one combined function. That way the functions are easier to reuse.
+        
         If you need information from the user, for example an API key for a third-party service, you can
         should ask the user for that information and then send it to the function. 
         Don't rely on process.env or any other local environment variables or config files.
@@ -77,12 +82,13 @@ export const createFunctionImplementationPrompt = `
         """
         
         Provide a complete JavaScript module that exports {functionName}, obeying the following code rules:
-        {codeStyle}        
+        ${codeStyle}        
                 
         The final output should be a complete JavaScript module that exports {functionName}
         
         Use --- as a delimiter at both the beginning and end of the module.
         `;
+
 export const createFunctionSpecPrompt = `
     Create a function spec for the code above.
     It should be formatted as a JSON Schema Object. Here is an example:
@@ -90,10 +96,6 @@ export const createFunctionSpecPrompt = `
     
     Use --- as delimiter at the beginning and end of the function spec.
 `;
-export const debugSystemPrompt = `
-    You are a master debugger. 
-`
-
 
 export const debugPrompt = `
     Debug the {functionName} function, or provide new inputs to it.
@@ -129,7 +131,7 @@ export const debugPrompt = `
     
     If the error is caused by the function code, provide a complete new version of the module that fixes the bug.
     Follow these code rules: 
-    {codeStyle} 
+    ${codeStyle} 
     Use --- as delimiter at both the beginning and end of the module.
     
     If you are unable to determine the cause of the bug, just return the same module

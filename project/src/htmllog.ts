@@ -2,11 +2,12 @@ import fs from "fs";
 import path from "path";
 import {ChatCompletionMessage} from "openai/src/resources/chat/completions";
 import {describeError} from "./util";
+import {ChatCompletion} from "openai/resources/chat";
 
 const FILE_NAME: string = 'log.html';
 
 export function info(message: string): void {
-    appendHtml(`<br><pre>${message}</pre>`);
+    appendHtml(`<br><xmp>${message}</xmp>`);
 }
 
 export function error(comment: string, error?: any): void {
@@ -21,38 +22,46 @@ export function initLogFile(): void {
     }
 
     const cssStyles: string = `<style>
-                      pre {
+                      pre, xmp {
                           white-space: pre-wrap;       
                           white-space: -moz-pre-wrap;  
                           white-space: -o-pre-wrap;    
                           word-wrap: break-word;       
                       }
+                     
                      </style>`;
     appendHtml(cssStyles);
 }
 
+function getChatMessageAsHtmlListItem(m: ChatCompletionMessage) {
+    return `<li><b>${m.role}</b> <xmp>${m.content}</xmp></li>`;
+}
+
 export function logGptRequest(model: string, messages: ChatCompletionMessage[], functions: any): void {
-    const requestBodyLog: string = `<h1>Request</h1><br>
+    const escapedFunctions = functions ? JSON.stringify(functions, null, 2) : 'None';
+    const requestBodyLog: string = `\n\n<h1>Request</h1><br>
                           <b>Model</b>: ${model} <br>
                           <b>Messages</b>: <br>
-                          ${messages.map(m => `- ${m.role}: ${m.role === 'user' ? '<pre>'+ m.content + '</pre>' : m.content}`).join('<br>')} <br><br>
-                          <b>Functions</b>: <br> <pre>${functions ? JSON.stringify(functions, null, 2) : 'None'}</pre> <br><hr>`;
+                          <ul>
+                          ${messages.map(message => getChatMessageAsHtmlListItem(message)).join('\n')}
+                          </ul>
+                          <b>Functions</b>: <br> <xmp>${escapedFunctions}</xmp> <br><hr>`;
     appendHtml(requestBodyLog);
 }
 
-export function logGptResponse(response: any): void {
-    let functionDetailsLog: string = '';
-    if(response.choices[0].finish_reason === 'function_call') {
-        const funcCall = response.choices[0].message.function_call;
-        functionDetailsLog = `<b>Function Call</b>: <br> <b>Name</b>: ${funcCall.name} <br> <b>Arguments</b>: <pre>${JSON.stringify(JSON.parse(funcCall.arguments), null, 2)}</pre><br>`;
-    }
-
-    const responseBodyLog: string = `<h1>Response</h1> <br>
-                           <b>Message Content</b>: <br><pre>${response.choices[0].message.content}</pre><br>
-                           ${functionDetailsLog}
-                           <b>Finish Reason</b>: ${response.choices[0].finish_reason} <br>
-                           <hr>`;
-
+export function logGptResponse(response: ChatCompletion): void {
+    const choice = response.choices[0];
+    const message = choice.message;
+    const functionCallString = message.function_call? JSON.stringify(message.function_call, null, 2) : "";
+    const responseBodyLog: string = `\n
+<h1>Response</h1> 
+<ul>
+    <li>Finish reason: ${choice.finish_reason}</li>
+    <li>Role: ${message.role}</li>
+    <li>Message: <xmp>${message.content}</xmp></li>
+    <li>Function call: <xmp>${functionCallString}</xmp></li>
+</ul>
+`
     appendHtml(responseBodyLog);
 }
 

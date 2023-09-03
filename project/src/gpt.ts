@@ -9,12 +9,13 @@ import {
 import path from "path";
 import fs from "fs";
 import * as prompts from "./prompts";
+import {MAX_FUNCTION_RESPONSE_LENGTH} from "./prompts";
 import * as log from "./htmllog";
 import ui from "./ui";
 import {Chat} from "openai/resources";
 import {OpenAI} from "openai";
 import {ChatCompletionMessageParam} from "openai/src/resources/chat/completions";
-import {createFolderIfMissing, describeError, resetFolder, trimBackticks} from "./util";
+import {createFolderIfMissing, describeError, resetFolder, trimBackticks, truncateIfNecessary} from "./util";
 import {ChatCompletionCreateParams, ChatCompletionCreateParamsNonStreaming} from "openai/resources/chat";
 import chalk from "chalk";
 import * as colors from "./colors";
@@ -55,10 +56,12 @@ async function executeGeneratedFunction(openai: OpenAI,
     while (attempts < MAX_ATTEMPTS) {
         ui.startSpinner(`Running function ${colors.functionName(functionName)} with args ${colors.functionArgs(JSON.stringify(functionArgs))}`)
         const result = await callFunction(codeFolder, workingDir, functionName, functionArgs);
+        log.info("Result of function call: " + JSON.stringify(result, null, 2));
         if (!result.thrownError) {
             ui.stopSpinnerWithCheckmark();
-            const resultDescription = result.returnValue !== undefined ? JSON.stringify(result) : "Function executed successfully but returned no value.";
-            messages.push({ role: "function", name: functionName, content: resultDescription });
+            const resultDescription = result.returnValue !== undefined ? JSON.stringify(result.returnValue) : "Function executed successfully but returned no value.";
+            const resultDescriptionTruncated = truncateIfNecessary(resultDescription, MAX_FUNCTION_RESPONSE_LENGTH);
+            messages.push({ role: "function", name: functionName, content: resultDescriptionTruncated });
             return null;
         }
 
@@ -127,7 +130,6 @@ async function askGptToDebugFunction(    openai: OpenAI,
 
     // Create a debug prompt for GPT to fix the function
     const debugMessage = prompts.debugPrompt
-        .replace('{codeStyle}', prompts.codeStyle)
         .replaceAll('{functionName}', functionName)
         .replace('{functionSpec}', functionSpec)
         .replace('{moduleCode}', moduleCode)
@@ -173,7 +175,6 @@ async function askGptToGenerateFunction(    openai: OpenAI,
     ];
 
     let implementationPrompt = prompts.createFunctionImplementationPrompt
-        .replace('{codeStyle}', prompts.codeStyle)
         .replaceAll('{functionName}', functionName)
         .replace('{functionDescription}', functionDescription);
 
@@ -235,8 +236,7 @@ async function verifyThatCodeIsSafe(    codeFolder: string,
 
 function getFunctionNamesString(functionSpecs: ChatCompletionCreateParams.Function[]) {
     let functionNames = functionSpecs.map(f => colors.functionName(f.name));
-    let functionNamesString = functionNames.join(', ');
-    return functionNamesString;
+    return functionNames.join(', ');
 }
 
 /**
