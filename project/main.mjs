@@ -38,12 +38,12 @@ const mainLoop = async () => {
             break;
         }
 
-        ui.textBox('green', 'blue', `You: ${question}`);
+        ui.textBox('green', 'cyan', `You: ${question}`);
 
         try {
             const result = await callGptWithDynamicFunctionCreation(openai, MODEL, OUTPUT_FOLDER, functionSpecs, messages, question);
             ui.stopSpinnerWithCheckmark();
-            ui.textBox('magenta', 'blue', `GPT: ${result}`);
+            ui.textBox('magenta', 'cyan', `GPT: ${result}`);
         } catch (error) {
             log.error(error);
             ui.stopSpinnerWithCheckmark();
