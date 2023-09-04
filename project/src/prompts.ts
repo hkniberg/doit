@@ -35,13 +35,15 @@ export const requestFunctionSpec = {
     }
 }
 export const mainSystemMessage = `
-        You are an assistant with the ability to dynamically request new functions.
+        {configuredSystemMessage}
+
+        You have the ability to dynamically request new functions.
         
         Before responding to a new prompt, figure out if you need any functions to complete the task.
         Use the given function requestFunction() function to describe what you need,
         and I will make sure those functions are available to you in the next message.
         
-        Don't request a new function if that function already exists.
+        Don't request a new function if that function (or equivalent) already exists.
         Don't request a new function for things you can do yourself.  
         
         Example 1: If I ask you to summarize a web page, don't ask for a function to summarize a web page.

@@ -24,9 +24,13 @@ const TEMPERATURE = 0.5;
 removeFolderIfItExists(path.join(OUTPUT_FOLDER, "files"));
 
 const mainLoop = async (): Promise<void> => {
+    const configuredSystemMessage = process.env.SYSTEM_MESSAGE!;
+    const systemMessage = prompts.mainSystemMessage
+        .replace("{configuredSystemMessage}", configuredSystemMessage);
     let messages: ChatCompletionMessageParam[] = [
-        { role: "system", content: prompts.mainSystemMessage}
+        { role: "system", content: systemMessage}
     ];
+
     const savedFunctionSpecs = await loadFunctionSpecs(OUTPUT_FOLDER);
     const functionSpecNames = savedFunctionSpecs.map(spec => chalk.blue(spec.name));
     if (functionSpecNames.length > 0) {
