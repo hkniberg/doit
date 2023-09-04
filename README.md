@@ -35,6 +35,11 @@ access a service)
 
 ![demo.jpg](docs/demo.jpg)
 
+# Sample prompts
+
+- Make a function called runShellCommand that uses child_process to run shell commands, and returns the result. Whenever suitable, use this instead of creating new functions, especially for basic tasks like file operations (ls, cat, mv, etc) or network operations (curl, wget, etc) or git operations (git clone, etc). Note that some tools like git write to stderr even if there isn't an error, so don't assume that stderr means failure. Also, if you're going to do something big, make sure you confirm with me first.
+- You: This file is messy. Please clean it up. Clone the repo, make the change, and commit. Check with me before pushing. https://github.com/hkniberg/doit/blob/main/project/src/util.ts
+
 # How to run
 
 - `cd project`
